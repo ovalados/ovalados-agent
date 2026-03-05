@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 FIREBASE_URL    = os.environ.get("FIREBASE_URL")
 FIREBASE_SECRET = os.environ.get("FIREBASE_SECRET")
-ESPN_SLUGS = ["270559", "slar", "super.rugby.americas"]
+ESPN_SLUGS = ["276687", "270559", "slar", "super.rugby.americas"]
 ESPN_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Accept": "application/json",
