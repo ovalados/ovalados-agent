@@ -24,8 +24,6 @@ HEADERS_API = {
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
 SRA_URL   = "https://www.espn.com.ar/rugby/nota/_/id/14697755/super-rugby-americas-rugby-resultados-posiciones-fixture-pampas-dogos-xv-tarucas-cobras-selknam-penarol-yacare-capibaras"
-SN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/rugby/180659/scoreboard"
-SN_STANDINGS  = "https://site.api.espn.com/apis/site/v2/sports/rugby/180659/standings"
 URBA_URL  = "https://www.espn.com.ar/rugby/nota/_/id/6719883/urba-top-14-fixture-resultados-tablas"
 
 # ── SRA teams ─────────────────────────────────────────────────────────────────
@@ -110,94 +108,28 @@ def scrape_scores(url, teams_list, normalize_fn):
                 print(f"  ✓ {home} {hs}–{as_} {away}")
     return results
 
-# ── Seis Naciones via ESPN API ────────────────────────────────────────────────
-SN_TEAM_MAP = {
-    "France":"Francia","Scotland":"Escocia","Ireland":"Irlanda",
-    "Italy":"Italia","England":"Inglaterra","Wales":"Gales",
-    "Francia":"Francia","Escocia":"Escocia","Irlanda":"Irlanda",
-    "Italia":"Italia","Inglaterra":"Inglaterra","Gales":"Gales",
+# ── Seis Naciones via scraping nota ESPN ─────────────────────────────────────
+SN_URL = "https://www.espn.com.ar/rugby/nota/_/id/15203928/rugby-seis-naciones-fixture-resultados-tabla-posiciones-2026-francia-irlanda-gales-escocia-inglaterra-italia-partidos"
+SN_TEAMS = ["Francia","Escocia","Irlanda","Italia","Inglaterra","Gales"]
+SN_ALIASES = {
+    "france":"Francia","scotland":"Escocia","ireland":"Irlanda",
+    "italy":"Italia","england":"Inglaterra","wales":"Gales",
+    "francia":"Francia","escocia":"Escocia","irlanda":"Irlanda",
+    "italia":"Italia","inglaterra":"Inglaterra","gales":"Gales",
 }
-def norm_sn(name): return SN_TEAM_MAP.get(name, name)
+def norm_sn(name): return SN_ALIASES.get(name.lower().strip(), name.strip())
 
 def fetch_seis_naciones():
     print("\n── SEIS NACIONES ────────────────────────────────")
-    results = []
-    standings = []
-
-    # Scoreboard
-    try:
-        r = requests.get(SN_SCOREBOARD, headers=HEADERS_API, timeout=10)
-        data = r.json()
-        print(f"  Scoreboard: {len(data.get('events',[]))} eventos")
-        for event in data.get("events", []):
-            comp = (event.get("competitions") or [{}])[0]
-            status = comp.get("status",{}).get("type",{})
-            completed = status.get("completed", False) or status.get("name","") in ("STATUS_FINAL","STATUS_FULL_TIME")
-            if not completed: continue
-            competitors = comp.get("competitors", [])
-            if len(competitors) < 2: continue
-            home = next((c for c in competitors if c.get("homeAway")=="home"), competitors[0])
-            away = next((c for c in competitors if c.get("homeAway")=="away"), competitors[1])
-            home_name = norm_sn(home.get("team",{}).get("displayName",""))
-            away_name = norm_sn(away.get("team",{}).get("displayName",""))
-            try:
-                hs = int(float(home.get("score",0)))
-                as_ = int(float(away.get("score",0)))
-            except: continue
-            date_str = event.get("date","")[:10]
-            print(f"  ✓ {home_name} {hs}–{as_} {away_name} ({date_str})")
-            results.append({"home":home_name,"away":away_name,"hs":hs,"as":as_,"date":date_str,"played":True})
-    except Exception as e:
-        print(f"  Scoreboard error: {e}")
-
-    # Standings
-    try:
-        r = requests.get(SN_STANDINGS, headers=HEADERS_API, timeout=10)
-        data = r.json()
-        print(f"  Standings keys: {list(data.keys())[:6]}")
-        groups = (data.get("standings") or {}).get("groups", [])
-        if not groups:
-            for child in data.get("children", []):
-                groups = (child.get("standings") or {}).get("groups", [])
-                if groups: break
-        if not groups:
-            groups = data.get("groups", [])
-        if groups:
-            entries = groups[0].get("standings",{}).get("entries", groups[0].get("entries",[]))
-            print(f"  Standings entries: {len(entries)}")
-            for entry in entries:
-                name = norm_sn(entry.get("team",{}).get("displayName",""))
-                stats = {s["name"]: s.get("value",0) for s in entry.get("stats",[])}
-                standings.append({
-                    "name": name,
-                    "pts": int(float(stats.get("points", stats.get("totalPoints", 0)))),
-                    "pj":  int(float(stats.get("gamesPlayed", 0))),
-                    "g":   int(float(stats.get("wins", 0))),
-                    "e":   int(float(stats.get("ties", stats.get("draws", 0)))),
-                    "p":   int(float(stats.get("losses", 0))),
-                    "pf":  int(float(stats.get("pointsFor", 0))),
-                    "pc":  int(float(stats.get("pointsAgainst", 0))),
-                    "bp":  int(float(stats.get("bonusPoints", 0))),
-                    "bf":  int(float(stats.get("losingBonusPoints", 0))),
-                })
-                print(f"  ✓ Standings: {name} {standings[-1]['pts']} pts")
-        else:
-            print("  No standings groups found")
-    except Exception as e:
-        print(f"  Standings error: {e}")
-
-    # Write to Firebase
-    print("  → Firebase...")
+    results = scrape_scores(SN_URL, SN_TEAMS, norm_sn)
+    print(f"  Total resultados: {len(results)}")
     if results:
         ok = firebase_put("seisNaciones/matches",
-            {f"{r['home']}_vs_{r['away']}_{r['date']}": r for r in results})
-        print(f"  Partidos ({len(results)}) → {'✓' if ok else '✗'}")
-    if standings:
-        ok = firebase_put("seisNaciones/standings", {t["name"]: t for t in standings})
-        print(f"  Standings ({len(standings)}) → {'✓' if ok else '✗'}")
+            {f"{r['home']}_vs_{r['away']}": r for r in results})
+        print(f"  Firebase → {'✓' if ok else '✗'}")
     firebase_patch("seisNaciones/meta", {
         "lastUpdate": datetime.now(timezone.utc).isoformat(),
-        "matchesFound": len(results), "source": "espn-api-180659"
+        "matchesFound": len(results), "source": "espn-nota-sn"
     })
 
 # ── Super Rugby Américas ──────────────────────────────────────────────────────
