@@ -77,35 +77,62 @@ def firebase_patch(path, data):
     except Exception as e:
         print(f"  Firebase PATCH error: {e}"); return False
 
-# ── Scraper genérico de notas ESPN ────────────────────────────────────────────
-def scrape_scores(url, teams_list, normalize_fn):
-    """Extrae resultados de una nota de ESPN buscando patrones TeamA X-Y TeamB"""
+# ── Scraper de tablas ESPN ────────────────────────────────────────────────────
+def fetch_html(url):
     try:
         r = requests.get(url, headers=HEADERS_HTML, timeout=15)
         r.raise_for_status()
-        html = r.text
+        return r.text
     except Exception as e:
-        print(f"  Error fetching {url}: {e}"); return []
+        print(f"  Error fetching {url}: {e}"); return ""
 
-    text = re.sub(r'<[^>]+>', ' ', html)
-    text = re.sub(r'&nbsp;', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
+def scrape_scores(url, teams_list, normalize_fn):
+    """
+    Parsea tablas HTML de notas ESPN.
+    Formato de fila jugada:  | fecha | TeamA | 18-28 | TeamB |
+    Formato de fila pendiente: | fecha | TeamA | vs   | TeamB |
+    """
+    html = fetch_html(url)
+    if not html: return []
 
     results = []
-    team_pat = '|'.join(re.escape(t) for t in teams_list)
-    for match in re.finditer(
-        rf'({team_pat})[^.]*?(\d+)[^.]*?[-–][^.]*?(\d+)[^.]*?({team_pat})',
-        text, re.IGNORECASE
-    ):
-        home = normalize_fn(match.group(1))
-        hs   = int(match.group(2))
-        as_  = int(match.group(3))
-        away = normalize_fn(match.group(4))
-        if home != away and hs < 200 and as_ < 200:
-            result = {"home":home,"away":away,"hs":hs,"as":as_,"played":True}
-            if result not in results:
-                results.append(result)
-                print(f"  ✓ {home} {hs}–{as_} {away}")
+    seen = set()
+
+    # Extraer filas de tabla
+    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL | re.IGNORECASE)
+    for row in rows:
+        cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
+        # Limpiar HTML de cada celda
+        cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+        cells = [re.sub(r'\s+', ' ', c).strip() for c in cells]
+        cells = [c for c in cells if c]
+
+        # Necesitamos exactamente 4 celdas: fecha, home, score, away
+        if len(cells) != 4: continue
+
+        date_cell, home_cell, score_cell, away_cell = cells
+
+        # Score debe ser formato X-Y con números razonables
+        score_match = re.match(r'^(\d{1,3})[-–](\d{1,3})$', score_cell.strip())
+        if not score_match: continue  # "vs" o cualquier otra cosa → salteamos
+
+        hs = int(score_match.group(1))
+        as_ = int(score_match.group(2))
+
+        home = normalize_fn(home_cell)
+        away = normalize_fn(away_cell)
+
+        # Validar que sean equipos conocidos
+        if home not in teams_list or away not in teams_list: continue
+        if home == away: continue
+
+        key = f"{home}_vs_{away}"
+        if key in seen: continue
+        seen.add(key)
+
+        results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
+        print(f"  ✓ {home} {hs}–{as_} {away}")
+
     return results
 
 # ── Seis Naciones via scraping nota ESPN ─────────────────────────────────────
