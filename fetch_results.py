@@ -182,20 +182,28 @@ def fetch_sra():
 
 # ── URBA — función genérica para cualquier torneo ─────────────────────────────
 def fetch_urba_torneo(torneo):
+    import unicodedata, re
+    
+    # Esta función aplasta los nombres para que coincidan siempre
+    def simplificar(texto):
+        if not texto: return ""
+        # Quita tildes
+        t = ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+        # Pasa a minúsculas y elimina todo lo que no sea letra o número (espacios, puntos, &, etc.)
+        return re.sub(r'[^a-z0-9]', '', t.lower())
+
     nombre = torneo["nombre"]
     firebase_key = torneo["firebase_key"]
     url = f"{URBA_API_BASE}/{torneo['id']}"
 
     print(f"\n── URBA {nombre.upper()} {'─'*(38 - len(nombre))}")
     
-    # 1. Descargar el fixture actual de Firebase (TU estructura)
     current_data = firebase_get(firebase_key)
     if not current_data or "matches" not in current_data:
         print(f"  ⚠ No se encontró la estructura base en Firebase para {nombre}")
         return
 
     try:
-        # 2. Traer los resultados frescos de la API URBA
         r = requests.get(url, headers=HEADERS_API, timeout=15)
         r.raise_for_status()
         data = r.json()
@@ -203,31 +211,32 @@ def fetch_urba_torneo(torneo):
         
         cambios_realizados = 0
 
-        # 3. Cruzar los datos
         for rnd in championship.get("rounds", []):
-            num_fecha = rnd["name"].split()[-1] # Saca el "1" de "Fecha 1"
+            # Buscar SOLO los números en el nombre de la fecha (Ej: "Fecha 1" -> "1")
+            numeros = re.findall(r'\d+', rnd.get("name", ""))
+            if not numeros: continue
+            num_fecha = str(int(numeros[0]))
             
-            # Verificar si esta fecha existe en TU JSON (ej: "1", "2")
             if num_fecha in current_data["matches"]:
-                
                 for match_api in rnd.get("matches", []):
-                    # Solo procesar si el partido ya se jugó
                     if not match_api.get("fulfilled"): 
                         continue
                     
-                    home_api = match_api["local_team"]["name"].strip().lower()
-                    away_api = match_api["visit_team"]["name"].strip().lower()
+                    # Simplificamos los nombres que vienen de la API
+                    home_api_simp = simplificar(match_api["local_team"]["name"])
+                    away_api_simp = simplificar(match_api["visit_team"]["name"])
                     hs = match_api["local_team_score"]
                     as_ = match_api["visit_team_score"]
 
-                    # Buscar este partido dentro del array 'ms' de TU JSON
+                    # Buscamos en TU base de datos
                     for m_web in current_data["matches"][num_fecha]["ms"]:
-                        home_web = m_web["home"].strip().lower()
-                        away_web = m_web["away"].strip().lower()
+                        # Simplificamos los nombres que tenés en tu JSON
+                        home_web_simp = simplificar(m_web["home"])
+                        away_web_simp = simplificar(m_web["away"])
 
-                        # Si los equipos coinciden, inyectar el resultado
-                        if home_web == home_api and away_web == away_api:
-                            # Solo actualizar si el resultado es nuevo o estaba en false
+                        # Si coinciden exactamente en su forma "aplastada"
+                        if home_web_simp == home_api_simp and away_web_simp == away_api_simp:
+                            # Solo actualiza si los puntos cambiaron o si no estaba jugado
                             if m_web.get("played") == False or m_web.get("hs") != hs or m_web.get("as") != as_:
                                 m_web["hs"] = hs
                                 m_web["as"] = as_
@@ -235,11 +244,8 @@ def fetch_urba_torneo(torneo):
                                 cambios_realizados += 1
                                 print(f"  ✓ Inyectado F{num_fecha}: {m_web['home']} {hs}-{as_} {m_web['away']}")
 
-        # 4. Si hubo cambios, subir TODO el JSON actualizado a Firebase
         if cambios_realizados > 0:
-            # Actualizamos el timestamp para que la web muestre el "✓ Actualizado"
             current_data["lastUpdate"] = datetime.now(timezone.utc).isoformat()
-            
             ok = firebase_put(firebase_key, current_data)
             print(f"  Firebase → {'✓ Subido con éxito' if ok else '✗ Error al subir'}")
         else:
