@@ -19,4 +19,5 @@ jobs:
         env:
           FIREBASE_URL:    ${{ secrets.FIREBASE_URL }}
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+          GH_TOKEN:        ${{ secrets.GH_TOKEN }}
         run: python fetch_results.py
