@@ -183,14 +183,23 @@ def fetch_sra():
 # ── URBA — función genérica para cualquier torneo ─────────────────────────────
 def fetch_urba_torneo(torneo):
     import unicodedata, re
-    
-    # Esta función aplasta los nombres para que coincidan siempre
-    def simplificar(texto):
-        if not texto: return ""
-        # Quita tildes
-        t = ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
-        # Pasa a minúsculas y elimina todo lo que no sea letra o número (espacios, puntos, &, etc.)
-        return re.sub(r'[^a-z0-9]', '', t.lower())
+
+    # Regla estricta: minúsculas, sin tildes, espacios reemplazados por guión bajo
+    def crear_clave(nombre):
+        t = ''.join(c for c in unicodedata.normalize('NFD', nombre) if unicodedata.category(c) != 'Mn')
+        return t.lower().strip().replace(' ', '_').replace('&', '')
+
+    # Diccionario "Traductor" por si la API manda un nombre distinto al tuyo
+    ALIAS = {
+        "hindu_club": "hindu",
+        "belgrano": "belgrano_athletic",
+        "buenos_aires": "buenos_aires_c_rc",
+        "at_del_rosario": "atletico_del_rosario",
+        "regatas": "regatas_bella_vista",
+        "c_a_s_i": "casi",
+        "s_i_c": "sic",
+        "c_u_b_a": "cuba"
+    }
 
     nombre = torneo["nombre"]
     firebase_key = torneo["firebase_key"]
@@ -200,60 +209,61 @@ def fetch_urba_torneo(torneo):
     
     current_data = firebase_get(firebase_key)
     if not current_data or "matches" not in current_data:
-        print(f"  ⚠ No se encontró la estructura base en Firebase para {nombre}")
+        print(f"  ⚠ No se encontró la base en Firebase.")
         return
 
     try:
         r = requests.get(url, headers=HEADERS_API, timeout=15)
-        r.raise_for_status()
         data = r.json()
         championship = data.get("championship", [{}])[0]
-        
         cambios_realizados = 0
 
         for rnd in championship.get("rounds", []):
-            # Buscar SOLO los números en el nombre de la fecha (Ej: "Fecha 1" -> "1")
             numeros = re.findall(r'\d+', rnd.get("name", ""))
             if not numeros: continue
             num_fecha = str(int(numeros[0]))
             
             if num_fecha in current_data["matches"]:
                 for match_api in rnd.get("matches", []):
+                    # Filtrar si no se jugó o si es de suplentes (solo los 15 titulares)
                     if not match_api.get("fulfilled"): 
                         continue
                     
-                    # Simplificamos los nombres que vienen de la API
-                    home_api_simp = simplificar(match_api["local_team"]["name"])
-                    away_api_simp = simplificar(match_api["visit_team"]["name"])
+                    home_raw = match_api["local_team"]["name"]
+                    away_raw = match_api["visit_team"]["name"]
                     hs = match_api["local_team_score"]
                     as_ = match_api["visit_team_score"]
 
-                    # Buscamos en TU base de datos
-                    for m_web in current_data["matches"][num_fecha]["ms"]:
-                        # Simplificamos los nombres que tenés en tu JSON
-                        home_web_simp = simplificar(m_web["home"])
-                        away_web_simp = simplificar(m_web["away"])
+                    # 1. ESTO DEVUELVE EL TEXTO AL "RUN" (Como lo tenías originalmente)
+                    print(f"  → API URBA: [{rnd['name']}] {home_raw} {hs}-{as_} {away_raw}")
 
-                        # Si coinciden exactamente en su forma "aplastada"
-                        if home_web_simp == home_api_simp and away_web_simp == away_api_simp:
-                            # Solo actualiza si los puntos cambiaron o si no estaba jugado
+                    # 2. Normalizamos nombres (ej: SIC vs Belgrano Athletic -> sic_belgrano_athletic)
+                    home_api = ALIAS.get(crear_clave(home_raw), crear_clave(home_raw))
+                    away_api = ALIAS.get(crear_clave(away_raw), crear_clave(away_raw))
+
+                    for m_web in current_data["matches"][num_fecha]["ms"]:
+                        home_web = ALIAS.get(crear_clave(m_web["home"]), crear_clave(m_web["home"]))
+                        away_web = ALIAS.get(crear_clave(m_web["away"]), crear_clave(m_web["away"]))
+
+                        # 3. Cruzamos los datos ya limpios
+                        if home_web == home_api and away_web == away_api:
                             if m_web.get("played") == False or m_web.get("hs") != hs or m_web.get("as") != as_:
                                 m_web["hs"] = hs
                                 m_web["as"] = as_
                                 m_web["played"] = True
                                 cambios_realizados += 1
-                                print(f"  ✓ Inyectado F{num_fecha}: {m_web['home']} {hs}-{as_} {m_web['away']}")
+                                print(f"    ✓ Sincronizado en Firebase: {home_web}_{away_web}")
 
         if cambios_realizados > 0:
             current_data["lastUpdate"] = datetime.now(timezone.utc).isoformat()
-            ok = firebase_put(firebase_key, current_data)
-            print(f"  Firebase → {'✓ Subido con éxito' if ok else '✗ Error al subir'}")
+            firebase_put(firebase_key, current_data)
+            print(f"  Firebase → ✓ Base de datos actualizada")
         else:
-            print("  No hay resultados nuevos para actualizar.")
+            print("  No hay cambios nuevos para enviar a la web.")
 
     except Exception as e:
         print(f"  Error procesando URBA ({nombre}): {e}")
-
+        
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     print(f"\n{'='*52}")
