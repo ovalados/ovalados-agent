@@ -73,20 +73,7 @@ def firebase_patch(path, data):
         return r.status_code == 200
     except Exception as e:
         print(f"  Firebase PATCH error: {e}"); return False
-        
-def firebase_get(path):
-    """Descarga el JSON actual desde Firebase."""
-    if not FIREBASE_URL or not FIREBASE_SECRET: 
-        return None
-    url = f"{FIREBASE_URL.rstrip('/')}/{path}.json?auth={FIREBASE_SECRET}"
-    try:
-        r = requests.get(url, timeout=15)
-        if r.status_code == 200:
-            return r.json()
-        return None
-    except Exception as e:
-        print(f"  Firebase GET error: {e}")
-        return None
+
 # ── Scraper de tablas ESPN ────────────────────────────────────────────────────
 def fetch_html(url):
     try:
@@ -182,88 +169,56 @@ def fetch_sra():
 
 # ── URBA — función genérica para cualquier torneo ─────────────────────────────
 def fetch_urba_torneo(torneo):
-    import unicodedata, re
-
-    # Regla estricta: minúsculas, sin tildes, espacios reemplazados por guión bajo
-    def crear_clave(nombre):
-        t = ''.join(c for c in unicodedata.normalize('NFD', nombre) if unicodedata.category(c) != 'Mn')
-        return t.lower().strip().replace(' ', '_').replace('&', '')
-
-    # Diccionario "Traductor" por si la API manda un nombre distinto al tuyo
-    ALIAS = {
-        "hindu_club": "hindu",
-        "belgrano": "belgrano_athletic",
-        "buenos_aires": "buenos_aires_c_rc",
-        "at_del_rosario": "atletico_del_rosario",
-        "regatas": "regatas_bella_vista",
-        "c_a_s_i": "casi",
-        "s_i_c": "sic",
-        "c_u_b_a": "cuba"
-    }
-
-    nombre = torneo["nombre"]
+    """
+    Llama a la API de URBA para un torneo dado y guarda los resultados en Firebase.
+    torneo: dict con keys 'id', 'nombre', 'firebase_key'
+    """
+    nombre      = torneo["nombre"]
     firebase_key = torneo["firebase_key"]
-    url = f"{URBA_API_BASE}/{torneo['id']}"
+    url         = f"{URBA_API_BASE}/{torneo['id']}"
 
     print(f"\n── URBA {nombre.upper()} {'─'*(38 - len(nombre))}")
-    
-    current_data = firebase_get(firebase_key)
-    if not current_data or "matches" not in current_data:
-        print(f"  ⚠ No se encontró la base en Firebase.")
-        return
-
+    results = []
     try:
         r = requests.get(url, headers=HEADERS_API, timeout=15)
+        r.raise_for_status()
         data = r.json()
         championship = data.get("championship", [{}])[0]
-        cambios_realizados = 0
+        rounds = championship.get("rounds", [])
 
-        for rnd in championship.get("rounds", []):
-            numeros = re.findall(r'\d+', rnd.get("name", ""))
-            if not numeros: continue
-            num_fecha = str(int(numeros[0]))
-            
-            if num_fecha in current_data["matches"]:
-                for match_api in rnd.get("matches", []):
-                    # Filtrar si no se jugó o si es de suplentes (solo los 15 titulares)
-                    if not match_api.get("fulfilled"): 
-                        continue
-                    
-                    home_raw = match_api["local_team"]["name"]
-                    away_raw = match_api["visit_team"]["name"]
-                    hs = match_api["local_team_score"]
-                    as_ = match_api["visit_team_score"]
-
-                    # 1. ESTO DEVUELVE EL TEXTO AL "RUN" (Como lo tenías originalmente)
-                    print(f"  → API URBA: [{rnd['name']}] {home_raw} {hs}-{as_} {away_raw}")
-
-                    # 2. Normalizamos nombres (ej: SIC vs Belgrano Athletic -> sic_belgrano_athletic)
-                    home_api = ALIAS.get(crear_clave(home_raw), crear_clave(home_raw))
-                    away_api = ALIAS.get(crear_clave(away_raw), crear_clave(away_raw))
-
-                    for m_web in current_data["matches"][num_fecha]["ms"]:
-                        home_web = ALIAS.get(crear_clave(m_web["home"]), crear_clave(m_web["home"]))
-                        away_web = ALIAS.get(crear_clave(m_web["away"]), crear_clave(m_web["away"]))
-
-                        # 3. Cruzamos los datos ya limpios
-                        if home_web == home_api and away_web == away_api:
-                            if m_web.get("played") == False or m_web.get("hs") != hs or m_web.get("as") != as_:
-                                m_web["hs"] = hs
-                                m_web["as"] = as_
-                                m_web["played"] = True
-                                cambios_realizados += 1
-                                print(f"    ✓ Sincronizado en Firebase: {home_web}_{away_web}")
-
-        if cambios_realizados > 0:
-            current_data["lastUpdate"] = datetime.now(timezone.utc).isoformat()
-            firebase_put(firebase_key, current_data)
-            print(f"  Firebase → ✓ Base de datos actualizada")
-        else:
-            print("  No hay cambios nuevos para enviar a la web.")
+        for rnd in rounds:
+            for match in rnd.get("matches", []):
+                if not match.get("fulfilled"):
+                    continue
+                home = match["local_team"]["name"].strip()
+                away = match["visit_team"]["name"].strip()
+                hs   = match["local_team_score"]
+                as_  = match["visit_team_score"]
+                num_fecha = rnd["name"].split()[-1]
+                key  = f"{home.replace(' ','_')}_vs_{away.replace(' ','_')}_F{num_fecha}"
+                results.append({
+                    "home": home, "away": away,
+                    "hs": hs, "as": as_,
+                    "played": True, "fecha": rnd["name"]
+                })
+                print(f"  ✓ [{rnd['name']}] {home} {hs}–{as_} {away}")
 
     except Exception as e:
-        print(f"  Error procesando URBA ({nombre}): {e}")
-        
+        print(f"  Error llamando API URBA ({nombre}): {e}")
+
+    print(f"  Total resultados: {len(results)}")
+    if results:
+        ok = firebase_put(f"{firebase_key}/matches",
+            {f"{r['home'].replace(' ','_')}_vs_{r['away'].replace(' ','_')}_F{r['fecha'].split()[-1]}": r
+             for r in results})
+        print(f"  Firebase → {'✓' if ok else '✗'}")
+    firebase_patch(f"{firebase_key}/meta", {
+        "lastUpdate":    datetime.now(timezone.utc).isoformat(),
+        "matchesFound":  len(results),
+        "source":        "api-urba-org-ar",
+        "championshipId": torneo["id"],
+    })
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     print(f"\n{'='*52}")
