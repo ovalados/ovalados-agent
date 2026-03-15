@@ -41,8 +41,12 @@ URBA_TORNEOS = [
     {"id": "2025200", "nombre": "Pre-Inter E",    "json_file": "data/urba-preinter-e.json",   "firebase_key": "urbaPreInterE"},
     {"id": "2025201", "nombre": "Pre-Inter F",    "json_file": "data/urba-preinter-f.json",   "firebase_key": "urbaPreInterF"},
     {"id": "2025206", "nombre": "M22",            "json_file": "data/urba-m22.json",          "firebase_key": "urbaM22"},
+    {"id": "2025177", "nombre": "Primera A", "json_file": "data/urba-primera-a.json", "firebase_key": "urbaPrimeraA"},
+    {"id": "2025178", "nombre": "Primera B", "json_file": "data/urba-primera-b.json", "firebase_key": "urbaPrimeraB"},
+    {"id": "2025179", "nombre": "Primera C", "json_file": "data/urba-primera-c.json", "firebase_key": "urbaPrimeraC"},
+    {"id": "2025180", "nombre": "Segunda", "json_file": "data/urba-segunda.json", "firebase_key": "urbaSegunda"},
+    {"id": "2025181", "nombre": "Tercera", "json_file": "data/urba-tercera.json", "firebase_key": "urbaTercera"},
 ]
-
 # ── SRA / SN teams ────────────────────────────────────────────────────────────
 SRA_TEAMS = ["Capibaras XV","Tarucas","Dogos XV","Pampas","Selknam","Yacare XV","Cobras BR","Peñarol"]
 SRA_ALIASES = {
