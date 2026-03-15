@@ -73,7 +73,20 @@ def firebase_patch(path, data):
         return r.status_code == 200
     except Exception as e:
         print(f"  Firebase PATCH error: {e}"); return False
-
+        
+def firebase_get(path):
+    """Descarga el JSON actual desde Firebase."""
+    if not FIREBASE_URL or not FIREBASE_SECRET: 
+        return None
+    url = f"{FIREBASE_URL.rstrip('/')}/{path}.json?auth={FIREBASE_SECRET}"
+    try:
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except Exception as e:
+        print(f"  Firebase GET error: {e}")
+        return None
 # ── Scraper de tablas ESPN ────────────────────────────────────────────────────
 def fetch_html(url):
     try:
@@ -169,55 +182,71 @@ def fetch_sra():
 
 # ── URBA — función genérica para cualquier torneo ─────────────────────────────
 def fetch_urba_torneo(torneo):
-    """
-    Llama a la API de URBA para un torneo dado y guarda los resultados en Firebase.
-    torneo: dict con keys 'id', 'nombre', 'firebase_key'
-    """
-    nombre      = torneo["nombre"]
+    nombre = torneo["nombre"]
     firebase_key = torneo["firebase_key"]
-    url         = f"{URBA_API_BASE}/{torneo['id']}"
+    url = f"{URBA_API_BASE}/{torneo['id']}"
 
     print(f"\n── URBA {nombre.upper()} {'─'*(38 - len(nombre))}")
-    results = []
+    
+    # 1. Descargar el fixture actual de Firebase (TU estructura)
+    current_data = firebase_get(firebase_key)
+    if not current_data or "matches" not in current_data:
+        print(f"  ⚠ No se encontró la estructura base en Firebase para {nombre}")
+        return
+
     try:
+        # 2. Traer los resultados frescos de la API URBA
         r = requests.get(url, headers=HEADERS_API, timeout=15)
         r.raise_for_status()
         data = r.json()
         championship = data.get("championship", [{}])[0]
-        rounds = championship.get("rounds", [])
+        
+        cambios_realizados = 0
 
-        for rnd in rounds:
-            for match in rnd.get("matches", []):
-                if not match.get("fulfilled"):
-                    continue
-                home = match["local_team"]["name"].strip()
-                away = match["visit_team"]["name"].strip()
-                hs   = match["local_team_score"]
-                as_  = match["visit_team_score"]
-                num_fecha = rnd["name"].split()[-1]
-                key  = f"{home.replace(' ','_')}_vs_{away.replace(' ','_')}_F{num_fecha}"
-                results.append({
-                    "home": home, "away": away,
-                    "hs": hs, "as": as_,
-                    "played": True, "fecha": rnd["name"]
-                })
-                print(f"  ✓ [{rnd['name']}] {home} {hs}–{as_} {away}")
+        # 3. Cruzar los datos
+        for rnd in championship.get("rounds", []):
+            num_fecha = rnd["name"].split()[-1] # Saca el "1" de "Fecha 1"
+            
+            # Verificar si esta fecha existe en TU JSON (ej: "1", "2")
+            if num_fecha in current_data["matches"]:
+                
+                for match_api in rnd.get("matches", []):
+                    # Solo procesar si el partido ya se jugó
+                    if not match_api.get("fulfilled"): 
+                        continue
+                    
+                    home_api = match_api["local_team"]["name"].strip().lower()
+                    away_api = match_api["visit_team"]["name"].strip().lower()
+                    hs = match_api["local_team_score"]
+                    as_ = match_api["visit_team_score"]
+
+                    # Buscar este partido dentro del array 'ms' de TU JSON
+                    for m_web in current_data["matches"][num_fecha]["ms"]:
+                        home_web = m_web["home"].strip().lower()
+                        away_web = m_web["away"].strip().lower()
+
+                        # Si los equipos coinciden, inyectar el resultado
+                        if home_web == home_api and away_web == away_api:
+                            # Solo actualizar si el resultado es nuevo o estaba en false
+                            if m_web.get("played") == False or m_web.get("hs") != hs or m_web.get("as") != as_:
+                                m_web["hs"] = hs
+                                m_web["as"] = as_
+                                m_web["played"] = True
+                                cambios_realizados += 1
+                                print(f"  ✓ Inyectado F{num_fecha}: {m_web['home']} {hs}-{as_} {m_web['away']}")
+
+        # 4. Si hubo cambios, subir TODO el JSON actualizado a Firebase
+        if cambios_realizados > 0:
+            # Actualizamos el timestamp para que la web muestre el "✓ Actualizado"
+            current_data["lastUpdate"] = datetime.now(timezone.utc).isoformat()
+            
+            ok = firebase_put(firebase_key, current_data)
+            print(f"  Firebase → {'✓ Subido con éxito' if ok else '✗ Error al subir'}")
+        else:
+            print("  No hay resultados nuevos para actualizar.")
 
     except Exception as e:
-        print(f"  Error llamando API URBA ({nombre}): {e}")
-
-    print(f"  Total resultados: {len(results)}")
-    if results:
-        ok = firebase_put(f"{firebase_key}/matches",
-            {f"{r['home'].replace(' ','_')}_vs_{r['away'].replace(' ','_')}_F{r['fecha'].split()[-1]}": r
-             for r in results})
-        print(f"  Firebase → {'✓' if ok else '✗'}")
-    firebase_patch(f"{firebase_key}/meta", {
-        "lastUpdate":    datetime.now(timezone.utc).isoformat(),
-        "matchesFound":  len(results),
-        "source":        "api-urba-org-ar",
-        "championshipId": torneo["id"],
-    })
+        print(f"  Error procesando URBA ({nombre}): {e}")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
