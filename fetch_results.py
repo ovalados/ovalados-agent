@@ -2,10 +2,10 @@
 """
 Ovalados Agent — Fetcher multi-torneo
 - Super Rugby Américas: scraping nota ESPN
-- Seis Naciones: ESPN API (league/180659)
-- URBA Top 14: scraping nota ESPN (arranca 14/03)
+- Seis Naciones:        scraping nota ESPN
+- URBA (todos los torneos): API oficial api.urba.org.ar
 """
-import requests, re, os, sys, json
+import requests, re, os, json
 from datetime import datetime, timezone
 
 FIREBASE_URL    = os.environ.get("FIREBASE_URL")
@@ -19,12 +19,25 @@ HEADERS_HTML = {
 HEADERS_API = {
     "User-Agent": "Mozilla/5.0",
     "Accept": "application/json",
-    "Referer": "https://www.espn.com/",
+    "Referer": "https://fixture.urba.org.ar/",
 }
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
-SRA_URL   = "https://www.espn.com.ar/rugby/nota/_/id/14697755/super-rugby-americas-rugby-resultados-posiciones-fixture-pampas-dogos-xv-tarucas-cobras-selknam-penarol-yacare-capibaras"
-URBA_URL  = "https://www.espn.com.ar/rugby/nota/_/id/6719883/urba-top-14-fixture-resultados-tablas"
+SRA_URL       = "https://www.espn.com.ar/rugby/nota/_/id/14697755/super-rugby-americas-rugby-resultados-posiciones-fixture-pampas-dogos-xv-tarucas-cobras-selknam-penarol-yacare-capibaras"
+URBA_API_BASE = "https://api.urba.org.ar/api/championship"
+
+# Torneos URBA activos 2026 — id del campeonato y clave en Firebase
+URBA_TORNEOS = [
+    {"id": "2025176", "nombre": "Top 14",         "firebase_key": "urbaTop14"},
+    {"id": "2025184", "nombre": "Intermedia",      "firebase_key": "urbaIntermedia"},
+    {"id": "2025185", "nombre": "Pre-Intermedia",  "firebase_key": "urbaPreIntermedia"},
+    {"id": "2025186", "nombre": "Pre-Inter B",     "firebase_key": "urbaPreInterB"},
+    {"id": "2025197", "nombre": "Pre-Inter C",     "firebase_key": "urbaPreInterC"},
+    {"id": "2025198", "nombre": "Pre-Inter D",     "firebase_key": "urbaPreInterD"},
+    {"id": "2025200", "nombre": "Pre-Inter E",     "firebase_key": "urbaPreInterE"},
+    {"id": "2025201", "nombre": "Pre-Inter F",     "firebase_key": "urbaPreInterF"},
+    {"id": "2025206", "nombre": "M22",             "firebase_key": "urbaM22"},
+]
 
 # ── SRA teams ─────────────────────────────────────────────────────────────────
 SRA_TEAMS = ["Capibaras XV","Tarucas","Dogos XV","Pampas","Selknam","Yacare XV","Cobras BR","Peñarol"]
@@ -39,23 +52,7 @@ SRA_ALIASES = {
     "peñarol":"Peñarol","peñarol rugby":"Peñarol",
 }
 
-# ── URBA teams ────────────────────────────────────────────────────────────────
-URBA_TEAMS = ["La Plata","Hindu","Champagnat","Alumni","Newman","SIC",
-              "Belgrano Athletic","Buenos Aires C&RC","CUBA","CASI",
-              "Los Tilos","Atlético del Rosario","Regatas Bella Vista","Los Matreros"]
-URBA_ALIASES = {
-    "la plata":"La Plata","hindu":"Hindu","champagnat":"Champagnat",
-    "alumni":"Alumni","newman":"Newman","sic":"SIC",
-    "belgrano athletic":"Belgrano Athletic","belgrano":"Belgrano Athletic",
-    "buenos aires c&rc":"Buenos Aires C&RC","bacrc":"Buenos Aires C&RC",
-    "cuba":"CUBA","casi":"CASI","los tilos":"Los Tilos",
-    "atlético del rosario":"Atlético del Rosario","atletico del rosario":"Atlético del Rosario",
-    "regatas bella vista":"Regatas Bella Vista","regatas":"Regatas Bella Vista",
-    "los matreros":"Los Matreros","matreros":"Los Matreros",
-}
-
-def norm_sra(name):  return SRA_ALIASES.get(name.lower().strip(), name.strip())
-def norm_urba(name): return URBA_ALIASES.get(name.lower().strip(), name.strip())
+def norm_sra(name): return SRA_ALIASES.get(name.lower().strip(), name.strip())
 
 # ── Firebase ──────────────────────────────────────────────────────────────────
 def firebase_put(path, data):
@@ -89,8 +86,8 @@ def fetch_html(url):
 def scrape_scores(url, teams_list, normalize_fn):
     """
     Parsea tablas HTML de notas ESPN.
-    Formato de fila jugada:  | fecha | TeamA | 18-28 | TeamB |
-    Formato de fila pendiente: | fecha | TeamA | vs   | TeamB |
+    Soporta 3 columnas (TeamA | score | TeamB) y 4 (fecha | TeamA | score | TeamB).
+    Deduplica ida/vuelta con clave canónica ordenada.
     """
     html = fetch_html(url)
     if not html: return []
@@ -98,44 +95,41 @@ def scrape_scores(url, teams_list, normalize_fn):
     results = []
     seen = set()
 
-    # Extraer filas de tabla
     rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL | re.IGNORECASE)
     for row in rows:
         cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
-        # Limpiar HTML de cada celda
         cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
         cells = [re.sub(r'\s+', ' ', c).strip() for c in cells]
         cells = [c for c in cells if c]
 
-        # Necesitamos exactamente 4 celdas: fecha, home, score, away
-        if len(cells) != 4: continue
+        if len(cells) == 4:
+            _, home_cell, score_cell, away_cell = cells
+        elif len(cells) == 3:
+            home_cell, score_cell, away_cell = cells
+        else:
+            continue
 
-        date_cell, home_cell, score_cell, away_cell = cells
-
-        # Score debe ser formato X-Y con números razonables
         score_match = re.match(r'^(\d{1,3})[-–](\d{1,3})$', score_cell.strip())
-        if not score_match: continue  # "vs" o cualquier otra cosa → salteamos
+        if not score_match: continue
 
-        hs = int(score_match.group(1))
+        hs  = int(score_match.group(1))
         as_ = int(score_match.group(2))
-
         home = normalize_fn(home_cell)
         away = normalize_fn(away_cell)
 
-        # Validar que sean equipos conocidos
         if home not in teams_list or away not in teams_list: continue
         if home == away: continue
 
-        key = f"{home}_vs_{away}"
-        if key in seen: continue
-        seen.add(key)
+        canonical = "_vs_".join(sorted([home, away]))
+        if canonical in seen: continue
+        seen.add(canonical)
 
         results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
         print(f"  ✓ {home} {hs}–{as_} {away}")
 
     return results
 
-# ── Seis Naciones via scraping nota ESPN ─────────────────────────────────────
+# ── Seis Naciones ─────────────────────────────────────────────────────────────
 SN_URL = "https://www.espn.com.ar/rugby/nota/_/id/15203928/rugby-seis-naciones-fixture-resultados-tabla-posiciones-2026-francia-irlanda-gales-escocia-inglaterra-italia-partidos"
 SN_TEAMS = ["Francia","Escocia","Irlanda","Italia","Inglaterra","Gales"]
 SN_ALIASES = {
@@ -173,18 +167,56 @@ def fetch_sra():
         "matchesFound": len(results), "source": "espn-nota-sra"
     })
 
-# ── URBA Top 14 ───────────────────────────────────────────────────────────────
-def fetch_urba():
-    print("\n── URBA TOP 14 ──────────────────────────────────")
-    results = scrape_scores(URBA_URL, URBA_TEAMS, norm_urba)
+# ── URBA — función genérica para cualquier torneo ─────────────────────────────
+def fetch_urba_torneo(torneo):
+    """
+    Llama a la API de URBA para un torneo dado y guarda los resultados en Firebase.
+    torneo: dict con keys 'id', 'nombre', 'firebase_key'
+    """
+    nombre      = torneo["nombre"]
+    firebase_key = torneo["firebase_key"]
+    url         = f"{URBA_API_BASE}/{torneo['id']}"
+
+    print(f"\n── URBA {nombre.upper()} {'─'*(38 - len(nombre))}")
+    results = []
+    try:
+        r = requests.get(url, headers=HEADERS_API, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        championship = data.get("championship", [{}])[0]
+        rounds = championship.get("rounds", [])
+
+        for rnd in rounds:
+            for match in rnd.get("matches", []):
+                if not match.get("fulfilled"):
+                    continue
+                home = match["local_team"]["name"].strip()
+                away = match["visit_team"]["name"].strip()
+                hs   = match["local_team_score"]
+                as_  = match["visit_team_score"]
+                num_fecha = rnd["name"].split()[-1]
+                key  = f"{home.replace(' ','_')}_vs_{away.replace(' ','_')}_F{num_fecha}"
+                results.append({
+                    "home": home, "away": away,
+                    "hs": hs, "as": as_,
+                    "played": True, "fecha": rnd["name"]
+                })
+                print(f"  ✓ [{rnd['name']}] {home} {hs}–{as_} {away}")
+
+    except Exception as e:
+        print(f"  Error llamando API URBA ({nombre}): {e}")
+
     print(f"  Total resultados: {len(results)}")
     if results:
-        ok = firebase_put("urbaTop14/matches",
-            {f"{r['home'].replace(' ','_')}_vs_{r['away'].replace(' ','_')}": r for r in results})
+        ok = firebase_put(f"{firebase_key}/matches",
+            {f"{r['home'].replace(' ','_')}_vs_{r['away'].replace(' ','_')}_F{r['fecha'].split()[-1]}": r
+             for r in results})
         print(f"  Firebase → {'✓' if ok else '✗'}")
-    firebase_patch("urbaTop14/meta", {
-        "lastUpdate": datetime.now(timezone.utc).isoformat(),
-        "matchesFound": len(results), "source": "espn-nota-urba"
+    firebase_patch(f"{firebase_key}/meta", {
+        "lastUpdate":    datetime.now(timezone.utc).isoformat(),
+        "matchesFound":  len(results),
+        "source":        "api-urba-org-ar",
+        "championshipId": torneo["id"],
     })
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -195,7 +227,9 @@ def main():
 
     fetch_sra()
     fetch_seis_naciones()
-    fetch_urba()
+
+    for torneo in URBA_TORNEOS:
+        fetch_urba_torneo(torneo)
 
     print(f"\n✓ Listo\n")
 
