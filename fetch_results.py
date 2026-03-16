@@ -41,12 +41,8 @@ URBA_TORNEOS = [
     {"id": "2025200", "nombre": "Pre-Inter E",    "json_file": "data/urba-preinter-e.json",   "firebase_key": "urbaPreInterE"},
     {"id": "2025201", "nombre": "Pre-Inter F",    "json_file": "data/urba-preinter-f.json",   "firebase_key": "urbaPreInterF"},
     {"id": "2025206", "nombre": "M22",            "json_file": "data/urba-m22.json",          "firebase_key": "urbaM22"},
-    {"id": "2025177", "nombre": "Primera A", "json_file": "data/urba-primera-a.json", "firebase_key": "urbaPrimeraA"},
-    {"id": "2025178", "nombre": "Primera B", "json_file": "data/urba-primera-b.json", "firebase_key": "urbaPrimeraB"},
-    {"id": "2025179", "nombre": "Primera C", "json_file": "data/urba-primera-c.json", "firebase_key": "urbaPrimeraC"},
-    {"id": "2025180", "nombre": "Segunda", "json_file": "data/urba-segunda.json", "firebase_key": "urbaSegunda"},
-    {"id": "2025181", "nombre": "Tercera", "json_file": "data/urba-tercera.json", "firebase_key": "urbaTercera"},
 ]
+
 # ── SRA / SN teams ────────────────────────────────────────────────────────────
 SRA_TEAMS = ["Capibaras XV","Tarucas","Dogos XV","Pampas","Selknam","Yacare XV","Cobras BR","Peñarol"]
 SRA_ALIASES = {
@@ -72,7 +68,6 @@ def norm_sn(name):  return SN_ALIASES.get(name.lower().strip(), name.strip())
 
 # ── GitHub ────────────────────────────────────────────────────────────────────
 def github_push(path, content_str, message):
-    """Sube o actualiza un archivo en el repo ovalados-sitio."""
     if not GH_TOKEN:
         print("  ⚠ GH_TOKEN no configurado"); return False
     headers = {
@@ -80,7 +75,6 @@ def github_push(path, content_str, message):
         "Accept": "application/vnd.github.v3+json",
     }
     api_url = f"https://api.github.com/repos/{GH_REPO}/contents/{path}"
-    # Obtener SHA actual (necesario para actualizar)
     sha = None
     try:
         r = requests.get(api_url, headers=headers, timeout=10)
@@ -160,23 +154,6 @@ def scrape_scores(url, teams_list, normalize_fn):
         print(f"  ✓ {home} {hs}–{as_} {away}")
     return results
 
-# ── Helpers para armar JSON con formato de la página ─────────────────────────
-def matches_list_to_dict(results):
-    """Convierte lista de partidos al dict por fecha que espera la página."""
-    by_round = {}
-    for r in results:
-        fecha = str(r.get("fecha_num", 1))
-        if fecha not in by_round:
-            by_round[fecha] = {"date": r.get("date", ""), "ms": []}
-        by_round[fecha]["ms"].append({
-            "home":   r["home"],
-            "away":   r["away"],
-            "hs":     r["hs"],
-            "as":     r["as"],
-            "played": True,
-        })
-    return by_round
-
 # ── Super Rugby Américas ──────────────────────────────────────────────────────
 def fetch_sra():
     print("\n── SUPER RUGBY AMÉRICAS ─────────────────────────")
@@ -184,7 +161,6 @@ def fetch_sra():
     print(f"  Total resultados: {len(results)}")
     now = datetime.now(timezone.utc).isoformat()
 
-    # Leer JSON actual de GitHub para mantener partidos no jugados
     current = {}
     if GH_TOKEN:
         try:
@@ -194,14 +170,21 @@ def fetch_sra():
                 current = json.loads(base64.b64decode(r.json()["content"]).decode())
         except Exception: pass
 
-    # Actualizar solo los partidos jugados
     matches = current.get("matches", {})
     teams_data = current.get("teams", [])
+
+    # FIX: Para cada resultado, buscar SOLO el primer partido sin jugar
+    # entre esos equipos (en orden de fecha). Así no pisa la vuelta.
     for r in results:
-        for rnd_key, rnd in matches.items():
+        found = False
+        for rnd_key in sorted(matches.keys(), key=lambda x: int(x)):
+            if found: break
+            rnd = matches[rnd_key]
             for m in rnd.get("ms", []):
-                if m["home"] == r["home"] and m["away"] == r["away"]:
+                if m["home"] == r["home"] and m["away"] == r["away"] and not m.get("played"):
                     m["hs"] = r["hs"]; m["as"] = r["as"]; m["played"] = True
+                    found = True
+                    break
 
     output = {**current, "matches": matches, "teams": teams_data,
               "lastUpdate": now, "matchesScraped": len(results)}
@@ -226,11 +209,17 @@ def fetch_seis_naciones():
         except Exception: pass
 
     matches = current.get("matches", {})
+    # Seis Naciones no tiene ida/vuelta — misma lógica conservadora igual
     for r in results:
-        for rnd in matches.values():
+        found = False
+        for rnd_key in sorted(matches.keys(), key=lambda x: int(x)):
+            if found: break
+            rnd = matches[rnd_key]
             for m in rnd.get("ms", []):
-                if m["home"] == r["home"] and m["away"] == r["away"]:
+                if m["home"] == r["home"] and m["away"] == r["away"] and not m.get("played"):
                     m["hs"] = r["hs"]; m["as"] = r["as"]; m["played"] = True
+                    found = True
+                    break
 
     output = {**current, "matches": matches,
               "lastUpdate": now, "matchesScraped": len(results)}
@@ -257,7 +246,6 @@ def fetch_urba_torneo(torneo):
         rounds = championship.get("rounds", [])
         teams_raw = championship.get("teams", [])
 
-        # Armar estructura de matches compatible con la página
         for rnd in rounds:
             num = rnd["name"].split()[-1]
             ms = []
@@ -269,12 +257,17 @@ def fetch_urba_torneo(torneo):
                 if played:
                     m["hs"] = match["local_team_score"]
                     m["as"] = match["visit_team_score"]
+                    # Guardar bonus en el partido para que el HTML los use
+                    if match.get("local_team_offensive_bonus"): m["bp_home"] = True
+                    if match.get("visit_team_offensive_bonus"): m["bp_away"] = True
+                    if match.get("local_team_defensive_bonus"): m["bf_home"] = True
+                    if match.get("visit_team_defensive_bonus"): m["bf_away"] = True
                     results.append({**m, "fecha": rnd["name"]})
                     print(f"  ✓ [{rnd['name']}] {home} {m['hs']}–{m['as']} {away}")
                 ms.append(m)
             rounds_data[num] = {"date": rnd["playdate"][:10], "ms": ms}
 
-        # Armar lista de equipos con estadísticas (calculadas desde resultados)
+        # Calcular tabla desde resultados
         team_stats = {}
         for t in teams_raw:
             name = t["name"].strip()
@@ -285,8 +278,8 @@ def fetch_urba_torneo(torneo):
                 if not match.get("fulfilled"): continue
                 home = match["local_team"]["name"].strip()
                 away = match["visit_team"]["name"].strip()
-                hs = match["local_team_score"]
-                as_ = match["visit_team_score"]
+                hs   = match["local_team_score"]
+                as_  = match["visit_team_score"]
                 if home not in team_stats or away not in team_stats: continue
                 h, a = team_stats[home], team_stats[away]
                 h["pj"] += 1; a["pj"] += 1
