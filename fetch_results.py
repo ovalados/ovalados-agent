@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 FIREBASE_URL    = os.environ.get("FIREBASE_URL")
 FIREBASE_SECRET = os.environ.get("FIREBASE_SECRET")
 GH_TOKEN        = os.environ.get("GH_TOKEN")
-GH_REPO         = "ovalados/ovalados-sitio"
+GH_REPO         = "GH_REPO = "ovalados/ovalados-ysisi"
 
 HEADERS_HTML = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
