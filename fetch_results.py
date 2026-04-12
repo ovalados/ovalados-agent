@@ -70,6 +70,63 @@ URBA_TORNEOS = [
     {"id": "2025196", "nombre": "Segunda Intermedia", "json_file": "data/segunda-intermedia.json",    "firebase_key": "urbaSegundaIntermedia"},
     {"id": "2025181", "nombre": "Tercera Superior",   "json_file": "data/urba-tercera.json",          "firebase_key": "urbaTercera"},
     {"id": "2025199", "nombre": "Tercera Intermedia", "json_file": "data/tercera-intermedia.json",    "firebase_key": "urbaTerceraIntermedia"},
+
+    # ── M19 (15 divisiones) ───────────────────────────────────────────────────
+    {"id": "2025213", "nombre": "M19 Superior", "json_file": "data/urba-m19.json",   "firebase_key": "urbaM19Superior"},
+    {"id": "2025214", "nombre": "M19 A",        "json_file": "data/urba-m19-a.json", "firebase_key": "urbaM19A"},
+    {"id": "2025215", "nombre": "M19 B",        "json_file": "data/urba-m19-b.json", "firebase_key": "urbaM19B"},
+    {"id": "2025216", "nombre": "M19 C",        "json_file": "data/urba-m19-c.json", "firebase_key": "urbaM19C"},
+    {"id": "2025217", "nombre": "M19 D",        "json_file": "data/urba-m19-d.json", "firebase_key": "urbaM19D"},
+    {"id": "2025218", "nombre": "M19 E",        "json_file": "data/urba-m19-e.json", "firebase_key": "urbaM19E"},
+    {"id": "2025219", "nombre": "M19 F",        "json_file": "data/urba-m19-f.json", "firebase_key": "urbaM19F"},
+    {"id": "2025220", "nombre": "M19 G",        "json_file": "data/urba-m19-g.json", "firebase_key": "urbaM19G"},
+    {"id": "2025221", "nombre": "M19 H",        "json_file": "data/urba-m19-h.json", "firebase_key": "urbaM19H"},
+    {"id": "2025222", "nombre": "M19 I",        "json_file": "data/urba-m19-i.json", "firebase_key": "urbaM19I"},
+    {"id": "2025223", "nombre": "M19 J",        "json_file": "data/urba-m19-j.json", "firebase_key": "urbaM19J"},
+    {"id": "2025224", "nombre": "M19 K",        "json_file": "data/urba-m19-k.json", "firebase_key": "urbaM19K"},
+    {"id": "2025225", "nombre": "M19 L",        "json_file": "data/urba-m19-l.json", "firebase_key": "urbaM19L"},
+    {"id": "2025226", "nombre": "M19 M",        "json_file": "data/urba-m19-m.json", "firebase_key": "urbaM19M"},
+    {"id": "2025227", "nombre": "M19 N",        "json_file": "data/urba-m19-n.json", "firebase_key": "urbaM19N"},
+
+    # ── M17 (12 divisiones) ───────────────────────────────────────────────────
+    {"id": "2025228", "nombre": "M17 Superior", "json_file": "data/urba-m17.json",   "firebase_key": "urbaM17Superior"},
+    {"id": "2025229", "nombre": "M17 A",        "json_file": "data/urba-m17-a.json", "firebase_key": "urbaM17A"},
+    {"id": "2025230", "nombre": "M17 B",        "json_file": "data/urba-m17-b.json", "firebase_key": "urbaM17B"},
+    {"id": "2025231", "nombre": "M17 C",        "json_file": "data/urba-m17-c.json", "firebase_key": "urbaM17C"},
+    {"id": "2025232", "nombre": "M17 D",        "json_file": "data/urba-m17-d.json", "firebase_key": "urbaM17D"},
+    {"id": "2025233", "nombre": "M17 E",        "json_file": "data/urba-m17-e.json", "firebase_key": "urbaM17E"},
+    {"id": "2025234", "nombre": "M17 F",        "json_file": "data/urba-m17-f.json", "firebase_key": "urbaM17F"},
+    {"id": "2025235", "nombre": "M17 G",        "json_file": "data/urba-m17-g.json", "firebase_key": "urbaM17G"},
+    {"id": "2025236", "nombre": "M17 H",        "json_file": "data/urba-m17-h.json", "firebase_key": "urbaM17H"},
+    {"id": "2025237", "nombre": "M17 I",        "json_file": "data/urba-m17-i.json", "firebase_key": "urbaM17I"},
+    {"id": "2025238", "nombre": "M17 J",        "json_file": "data/urba-m17-j.json", "firebase_key": "urbaM17J"},
+    {"id": "2025239", "nombre": "M17 K",        "json_file": "data/urba-m17-k.json", "firebase_key": "urbaM17K"},
+
+    # ── M16 (12 divisiones) ───────────────────────────────────────────────────
+    {"id": "2025240", "nombre": "M16 Superior", "json_file": "data/urba-m16.json",   "firebase_key": "urbaM16Superior"},
+    {"id": "2025241", "nombre": "M16 A",        "json_file": "data/urba-m16-a.json", "firebase_key": "urbaM16A"},
+    {"id": "2025242", "nombre": "M16 B",        "json_file": "data/urba-m16-b.json", "firebase_key": "urbaM16B"},
+    {"id": "2025243", "nombre": "M16 C",        "json_file": "data/urba-m16-c.json", "firebase_key": "urbaM16C"},
+    {"id": "2025244", "nombre": "M16 D",        "json_file": "data/urba-m16-d.json", "firebase_key": "urbaM16D"},
+    {"id": "2025245", "nombre": "M16 E",        "json_file": "data/urba-m16-e.json", "firebase_key": "urbaM16E"},
+    {"id": "2025246", "nombre": "M16 F",        "json_file": "data/urba-m16-f.json", "firebase_key": "urbaM16F"},
+    {"id": "2025247", "nombre": "M16 G",        "json_file": "data/urba-m16-g.json", "firebase_key": "urbaM16G"},
+    {"id": "2025248", "nombre": "M16 H",        "json_file": "data/urba-m16-h.json", "firebase_key": "urbaM16H"},
+    {"id": "2025249", "nombre": "M16 I",        "json_file": "data/urba-m16-i.json", "firebase_key": "urbaM16I"},
+    {"id": "2025250", "nombre": "M16 J",        "json_file": "data/urba-m16-j.json", "firebase_key": "urbaM16J"},
+    {"id": "2025251", "nombre": "M16 K",        "json_file": "data/urba-m16-k.json", "firebase_key": "urbaM16K"},
+
+    # ── M15 (10 divisiones) ───────────────────────────────────────────────────
+    {"id": "2025252", "nombre": "M15 Superior", "json_file": "data/urba-m15.json",   "firebase_key": "urbaM15Superior"},
+    {"id": "2025253", "nombre": "M15 A",        "json_file": "data/urba-m15-a.json", "firebase_key": "urbaM15A"},
+    {"id": "2025254", "nombre": "M15 B",        "json_file": "data/urba-m15-b.json", "firebase_key": "urbaM15B"},
+    {"id": "2025255", "nombre": "M15 C",        "json_file": "data/urba-m15-c.json", "firebase_key": "urbaM15C"},
+    {"id": "2025256", "nombre": "M15 D",        "json_file": "data/urba-m15-d.json", "firebase_key": "urbaM15D"},
+    {"id": "2025257", "nombre": "M15 E",        "json_file": "data/urba-m15-e.json", "firebase_key": "urbaM15E"},
+    {"id": "2025258", "nombre": "M15 F",        "json_file": "data/urba-m15-f.json", "firebase_key": "urbaM15F"},
+    {"id": "2025259", "nombre": "M15 G",        "json_file": "data/urba-m15-g.json", "firebase_key": "urbaM15G"},
+    {"id": "2025260", "nombre": "M15 H",        "json_file": "data/urba-m15-h.json", "firebase_key": "urbaM15H"},
+    {"id": "2025261", "nombre": "M15 I",        "json_file": "data/urba-m15-i.json", "firebase_key": "urbaM15I"},
 ]
 
 # ── SRA / SN teams ────────────────────────────────────────────────────────────
@@ -202,8 +259,6 @@ def fetch_sra():
     matches = current.get("matches", {})
     teams_data = current.get("teams", [])
 
-    # Para cada resultado, buscar SOLO el primer partido sin jugar
-    # entre esos equipos (en orden de fecha). Así no pisa la vuelta.
     for r in results:
         found = False
         for rnd_key in sorted(matches.keys(), key=lambda x: int(x)):
@@ -315,9 +370,7 @@ def fetch_urba_torneo(torneo):
                 a["pf"] += as_; a["pc"] += hs
                 if hs > as_:
                     h["g"] += 1; h["pts"] += 4; a["p"] += 1
-                    a["form"].append("w"); h["form"].append("l")
-                    # fix: h gana, h form = w, a form = l
-                    h["form"][-1] = "w"; a["form"][-1] = "l"
+                    h["form"].append("w"); a["form"].append("l")
                 elif hs < as_:
                     a["g"] += 1; a["pts"] += 4; h["p"] += 1
                     h["form"].append("l"); a["form"].append("w")
