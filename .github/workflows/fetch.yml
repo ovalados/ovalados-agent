@@ -29,6 +29,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FIREBASE_URL: ${{ secrets.FIREBASE_URL }}
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
-        run: python scraper/fetch.py
+        run: python fetch_results.py
 
       # El scraper ya sube los JSON directo via GitHub API — no se necesita git push adicional
