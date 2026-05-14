@@ -3,7 +3,7 @@
 Ovalados Agent — Fetcher multi-torneo
 - Super Rugby Américas: scraping nota ESPN  → data/superrugby.json
 - Seis Naciones:        scraping nota ESPN  → data/seisNaciones.json
-- URBA (todos):         API oficial URBA    → data/urba-{key}.json / data/juvenil-*.json
+- URBA (todos):         API oficial URBA    → data/urba-{key}.json
 Todos los JSON se suben automáticamente al repo ovalados-sitio en GitHub.
 """
 import requests, re, os, json, base64
@@ -26,14 +26,9 @@ HEADERS_API = {
 }
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
-ESPN_SLAR_API = "https://site.api.espn.com/apis/site/v2/sports/rugby-union/slar/scoreboard"
+SRA_URL       = "https://www.espn.com.ar/rugby/nota/_/id/14697755/super-rugby-americas-rugby-resultados-posiciones-fixture-pampas-dogos-xv-tarucas-cobras-selknam-penarol-yacare-capibaras"
 SN_URL        = "https://www.espn.com.ar/rugby/nota/_/id/15203928/rugby-seis-naciones-fixture-resultados-tabla-posiciones-2026-francia-irlanda-gales-escocia-inglaterra-italia-partidos"
 URBA_API_BASE = "https://api.urba.org.ar/api/championship"
-
-HEADERS_ESPN = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json",
-}
 
 # ── Torneos URBA activos 2026 — lista completa ────────────────────────────────
 URBA_TORNEOS = [
@@ -77,61 +72,61 @@ URBA_TORNEOS = [
     {"id": "2025199", "nombre": "Tercera Intermedia", "json_file": "data/tercera-intermedia.json",    "firebase_key": "urbaTerceraIntermedia"},
 
     # ── M19 (15 divisiones) ───────────────────────────────────────────────────
-    {"id": "2025213", "nombre": "M19 N1-G2-ZA-EqA",  "json_file": "data/juvenil-m19-n1-g2-za-eqa.json",  "firebase_key": "urbaM19N1ZaEqA"},
-    {"id": "2025214", "nombre": "M19 N1-G2-ZA-EqB",  "json_file": "data/juvenil-m19-n1-g2-za-eqb.json",  "firebase_key": "urbaM19N1ZaEqB"},
-    {"id": "2025215", "nombre": "M19 N1-G2-ZB-EqA",  "json_file": "data/juvenil-m19-n1-g2-zb-eqa.json",  "firebase_key": "urbaM19N1ZbEqA"},
-    {"id": "2025216", "nombre": "M19 N1-G2-ZB-EqB",  "json_file": "data/juvenil-m19-n1-g2-zb-eqb.json",  "firebase_key": "urbaM19N1ZbEqB"},
-    {"id": "2025217", "nombre": "M19 N2-G2-ZC-EqA",  "json_file": "data/juvenil-m19-n2-g2-zc-eqa.json",  "firebase_key": "urbaM19N2ZcEqA"},
-    {"id": "2025218", "nombre": "M19 N2-G2-ZC-EqB",  "json_file": "data/juvenil-m19-n2-g2-zc-eqb.json",  "firebase_key": "urbaM19N2ZcEqB"},
-    {"id": "2025219", "nombre": "M19 N2-G2-ZD-EqA",  "json_file": "data/juvenil-m19-n2-g2-zd-eqa.json",  "firebase_key": "urbaM19N2ZdEqA"},
-    {"id": "2025220", "nombre": "M19 N2-G2-ZD-EqB",  "json_file": "data/juvenil-m19-n2-g2-zd-eqb.json",  "firebase_key": "urbaM19N2ZdEqB"},
-    {"id": "2025228", "nombre": "M19 G2-ZDes-EqB",   "json_file": "data/juvenil-m19-g2-zdes-eqb.json",   "firebase_key": "urbaM19G2ZDesEqB"},
-    {"id": "2025229", "nombre": "M19 Form-ZB",        "json_file": "data/juvenil-m19-form-zb.json",        "firebase_key": "urbaM19FormZB"},
-    {"id": "2025230", "nombre": "M19 Form-ZC",        "json_file": "data/juvenil-m19-form-zc.json",        "firebase_key": "urbaM19FormZC"},
-    {"id": "2025224", "nombre": "M19 G1-ZA",          "json_file": "data/juvenil-m19-g1-za.json",          "firebase_key": "urbaM19G1ZA"},
-    {"id": "2025225", "nombre": "M19 G1-ZB",          "json_file": "data/juvenil-m19-g1-zb.json",          "firebase_key": "urbaM19G1ZB"},
-    {"id": "2025226", "nombre": "M19 Form-ZA",        "json_file": "data/juvenil-m19-form-za.json",        "firebase_key": "urbaM19FormZA"},
-    {"id": "2025227", "nombre": "M19 G2-ZDes-EqA",   "json_file": "data/juvenil-m19-g2-zdes-eqa.json",   "firebase_key": "urbaM19G2ZDesEqA"},
+    {"id": "2025213", "nombre": "M19 G2 NIVEL 1 A",              "json_file": "data/urba-m19-g2-nivel-1-a.json",              "firebase_key": "urbaM19G2NIVEL1A"},
+    {"id": "2025214", "nombre": "M19 G2 NIVEL 1 A Eq B",         "json_file": "data/urba-m19-g2-nivel-1-a-eq-b.json",         "firebase_key": "urbaM19G2NIVEL1AEqB"},
+    {"id": "2025215", "nombre": "M19 G2 NIVEL 1 B",              "json_file": "data/urba-m19-g2-nivel-1-b.json",              "firebase_key": "urbaM19G2NIVEL1B"},
+    {"id": "2025216", "nombre": "M19 G2 NIVEL 1 B Eq B",         "json_file": "data/urba-m19-g2-nivel-1-b-eq-b.json",         "firebase_key": "urbaM19G2NIVEL1BEqB"},
+    {"id": "2025217", "nombre": "M19 G2 NIVEL 2 C",              "json_file": "data/urba-m19-g2-nivel-2-c.json",              "firebase_key": "urbaM19G2NIVEL2C"},
+    {"id": "2025218", "nombre": "M19 G2 NIVEL 2 C Eq B",         "json_file": "data/urba-m19-g2-nivel-2-c-eq-b.json",         "firebase_key": "urbaM19G2NIVEL2CEqB"},
+    {"id": "2025219", "nombre": "M19 G2 NIVEL 2 D",              "json_file": "data/urba-m19-g2-nivel-2-d.json",              "firebase_key": "urbaM19G2NIVEL2D"},
+    {"id": "2025220", "nombre": "M19 G2 NIVEL 2 D Eq B",         "json_file": "data/urba-m19-g2-nivel-2-d-eq-b.json",         "firebase_key": "urbaM19G2NIVEL2DEqB"},
+    {"id": "2025224", "nombre": "M19 G1 A",                      "json_file": "data/urba-m19-g1-a.json",                      "firebase_key": "urbaM19G1A"},
+    {"id": "2025225", "nombre": "M19 G1 B",                      "json_file": "data/urba-m19-g1-b.json",                      "firebase_key": "urbaM19G1B"},
+    {"id": "2025226", "nombre": "M19 G1 Formativa A",            "json_file": "data/urba-m19-g1-formativa-a.json",            "firebase_key": "urbaM19G1FormativaA"},
+    {"id": "2025227", "nombre": "M19 G2 NIVEL 2 Desarrollo",     "json_file": "data/urba-m19-g2-nivel-2-desarrollo.json",     "firebase_key": "urbaM19G2NIVEL2Desarrollo"},
+    {"id": "2025228", "nombre": "M19 G2 NIVEL 2 Desarrollo Eq B","json_file": "data/urba-m19-g2-nivel-2-desarrollo-eq-b.json","firebase_key": "urbaM19G2NIVEL2DesarrolloEqB"},
+    {"id": "2025229", "nombre": "M19 G1 Formativa B",            "json_file": "data/urba-m19-g1-formativa-b.json",            "firebase_key": "urbaM19G1FormativaB"},
+    {"id": "2025230", "nombre": "M19 G1 Formativa C",            "json_file": "data/urba-m19-g1-formativa-c.json",            "firebase_key": "urbaM19G1FormativaC"},
 
     # ── M17 (12 divisiones) ───────────────────────────────────────────────────
-    {"id": "2025240", "nombre": "M17 Form-ZA",        "json_file": "data/juvenil-m17-form-za.json",        "firebase_key": "urbaM17FormZA"},
-    {"id": "2025241", "nombre": "M17 Form-ZB",        "json_file": "data/juvenil-m17-form-zb.json",        "firebase_key": "urbaM17FormZB"},
-    {"id": "2025242", "nombre": "M17 Form-ZC",        "json_file": "data/juvenil-m17-form-zc.json",        "firebase_key": "urbaM17FormZC"},
-    {"id": "2025231", "nombre": "M17 N1-G2-ZA-EqA",  "json_file": "data/juvenil-m17-n1-g2-za-eqa.json",  "firebase_key": "urbaM17N1ZaEqA"},
-    {"id": "2025232", "nombre": "M17 N1-G2-ZA-EqB",  "json_file": "data/juvenil-m17-n1-g2-za-eqb.json",  "firebase_key": "urbaM17N1ZaEqB"},
-    {"id": "2025233", "nombre": "M17 N1-G2-ZB-EqA",  "json_file": "data/juvenil-m17-n1-g2-zb-eqa.json",  "firebase_key": "urbaM17N1ZbEqA"},
-    {"id": "2025234", "nombre": "M17 N1-G2-ZB-EqB",  "json_file": "data/juvenil-m17-n1-g2-zb-eqb.json",  "firebase_key": "urbaM17N1ZbEqB"},
-    {"id": "2025235", "nombre": "M17 N2-G2-ZC-EqA",  "json_file": "data/juvenil-m17-n2-g2-zc-eqa.json",  "firebase_key": "urbaM17N2ZcEqA"},
-    {"id": "2025236", "nombre": "M17 N2-G2-ZC-EqB",  "json_file": "data/juvenil-m17-n2-g2-zc-eqb.json",  "firebase_key": "urbaM17N2ZcEqB"},
-    {"id": "2025237", "nombre": "M17 G1-ZA",          "json_file": "data/juvenil-m17-g1-za.json",          "firebase_key": "urbaM17G1ZA"},
-    {"id": "2025238", "nombre": "M17 G1-ZB",          "json_file": "data/juvenil-m17-g1-zb.json",          "firebase_key": "urbaM17G1ZB"},
-    {"id": "2025239", "nombre": "M17 G1-ZC",          "json_file": "data/juvenil-m17-g1-zc.json",          "firebase_key": "urbaM17G1ZC"},
+    {"id": "2025231", "nombre": "M17 G2 NIVEL 1 A",              "json_file": "data/urba-m17-g2-nivel-1-a.json",              "firebase_key": "urbaM17G2NIVEL1A"},
+    {"id": "2025232", "nombre": "M17 G2 NIVEL 1 A Eq B",         "json_file": "data/urba-m17-g2-nivel-1-a-eq-b.json",         "firebase_key": "urbaM17G2NIVEL1AEqB"},
+    {"id": "2025233", "nombre": "M17 G2 NIVEL 1 B",              "json_file": "data/urba-m17-g2-nivel-1-b.json",              "firebase_key": "urbaM17G2NIVEL1B"},
+    {"id": "2025234", "nombre": "M17 G2 NIVEL 1 B Eq B",         "json_file": "data/urba-m17-g2-nivel-1-b-eq-b.json",         "firebase_key": "urbaM17G2NIVEL1BEqB"},
+    {"id": "2025235", "nombre": "M17 G2 NIVEL 2 C",              "json_file": "data/urba-m17-g2-nivel-2-c.json",              "firebase_key": "urbaM17G2NIVEL2C"},
+    {"id": "2025236", "nombre": "M17 G2 NIVEL 2 C Eq B",         "json_file": "data/urba-m17-g2-nivel-2-c-eq-b.json",         "firebase_key": "urbaM17G2NIVEL2CEqB"},
+    {"id": "2025237", "nombre": "M17 G1 A",                      "json_file": "data/urba-m17-g1-a.json",                      "firebase_key": "urbaM17G1A"},
+    {"id": "2025238", "nombre": "M17 G1 B",                      "json_file": "data/urba-m17-g1-b.json",                      "firebase_key": "urbaM17G1B"},
+    {"id": "2025239", "nombre": "M17 G1 C",                      "json_file": "data/urba-m17-g1-c.json",                      "firebase_key": "urbaM17G1C"},
+    {"id": "2025240", "nombre": "M17 G1 Formativo A",            "json_file": "data/urba-m17-g1-formativo-a.json",            "firebase_key": "urbaM17G1FormativoA"},
+    {"id": "2025241", "nombre": "M17 G1 Formativo B",            "json_file": "data/urba-m17-g1-formativo-b.json",            "firebase_key": "urbaM17G1FormativoB"},
+    {"id": "2025242", "nombre": "M17 G1 Formativo C",            "json_file": "data/urba-m17-g1-formativo-c.json",            "firebase_key": "urbaM17G1FormativoC"},
 
     # ── M16 (12 divisiones) ───────────────────────────────────────────────────
-    {"id": "2025254", "nombre": "M16 Form-ZB",        "json_file": "data/juvenil-m16-form-zb.json",        "firebase_key": "urbaM16FormZB"},
-    {"id": "2025253", "nombre": "M16 Form-ZA",        "json_file": "data/juvenil-m16-form-za.json",        "firebase_key": "urbaM16FormZA"},
-    {"id": "2025252", "nombre": "M16 G1-ZB",          "json_file": "data/juvenil-m16-g1-zb.json",          "firebase_key": "urbaM16G1ZB"},
-    {"id": "2025243", "nombre": "M16 N1-G2-ZA-EqA",  "json_file": "data/juvenil-m16-n1-g2-za-eqa.json",  "firebase_key": "urbaM16N1ZaEqA"},
-    {"id": "2025244", "nombre": "M16 N1-G2-ZA-EqB",  "json_file": "data/juvenil-m16-n1-g2-za-eqb.json",  "firebase_key": "urbaM16N1ZaEqB"},
-    {"id": "2025245", "nombre": "M16 N1-G2-ZB-EqA",  "json_file": "data/juvenil-m16-n1-g2-zb-eqa.json",  "firebase_key": "urbaM16N1ZbEqA"},
-    {"id": "2025246", "nombre": "M16 N1-G2-ZB-EqB",  "json_file": "data/juvenil-m16-n1-g2-zb-eqb.json",  "firebase_key": "urbaM16N1ZbEqB"},
-    {"id": "2025247", "nombre": "M16 N2-G2-ZC-EqA",  "json_file": "data/juvenil-m16-n2-g2-zc-eqa.json",  "firebase_key": "urbaM16N2ZcEqA"},
-    {"id": "2025248", "nombre": "M16 N2-G2-ZC-EqB",  "json_file": "data/juvenil-m16-n2-g2-zc-eqb.json",  "firebase_key": "urbaM16N2ZcEqB"},
-    {"id": "2025249", "nombre": "M16 G2-ZDes-EqA",   "json_file": "data/juvenil-m16-g2-zdes-eqa.json",   "firebase_key": "urbaM16G2ZDesEqA"},
-    {"id": "2025250", "nombre": "M16 G2-ZDes-EqB",   "json_file": "data/juvenil-m16-g2-zdes-eqb.json",   "firebase_key": "urbaM16G2ZDesEqB"},
-    {"id": "2025251", "nombre": "M16 G1-ZA",          "json_file": "data/juvenil-m16-g1-za.json",          "firebase_key": "urbaM16G1ZA"},
+    {"id": "2025243", "nombre": "M16 G2 NIVEL 1 A",              "json_file": "data/urba-m16-g2-nivel-1-a.json",              "firebase_key": "urbaM16G2NIVEL1A"},
+    {"id": "2025244", "nombre": "M16 G2 NIVEL 1 A Eq B",         "json_file": "data/urba-m16-g2-nivel-1-a-eq-b.json",         "firebase_key": "urbaM16G2NIVEL1AEqB"},
+    {"id": "2025245", "nombre": "M16 G2 NIVEL 1 B",              "json_file": "data/urba-m16-g2-nivel-1-b.json",              "firebase_key": "urbaM16G2NIVEL1B"},
+    {"id": "2025246", "nombre": "M16 G2 NIVEL 1 B Eq B",         "json_file": "data/urba-m16-g2-nivel-1-b-eq-b.json",         "firebase_key": "urbaM16G2NIVEL1BEqB"},
+    {"id": "2025247", "nombre": "M16 G2 NIVEL 2 C",              "json_file": "data/urba-m16-g2-nivel-2-c.json",              "firebase_key": "urbaM16G2NIVEL2C"},
+    {"id": "2025248", "nombre": "M16 G2 NIVEL 2 C Eq B",         "json_file": "data/urba-m16-g2-nivel-2-c-eq-b.json",         "firebase_key": "urbaM16G2NIVEL2CEqB"},
+    {"id": "2025249", "nombre": "M16 G2 NIVEL 2 Desarrollo",     "json_file": "data/urba-m16-g2-nivel-2-desarrollo.json",     "firebase_key": "urbaM16G2NIVEL2Desarrollo"},
+    {"id": "2025250", "nombre": "M16 G2 NIVEL 2 Desarrollo Eq B","json_file": "data/urba-m16-g2-nivel-2-desarrollo-eq-b.json","firebase_key": "urbaM16G2NIVEL2DesarrolloEqB"},
+    {"id": "2025251", "nombre": "M16 G1 A",                      "json_file": "data/urba-m16-g1-a.json",                      "firebase_key": "urbaM16G1A"},
+    {"id": "2025252", "nombre": "M16 G1 B",                      "json_file": "data/urba-m16-g1-b.json",                      "firebase_key": "urbaM16G1B"},
+    {"id": "2025253", "nombre": "M16 G1 Formativa A",            "json_file": "data/urba-m16-g1-formativa-a.json",            "firebase_key": "urbaM16G1FormativaA"},
+    {"id": "2025254", "nombre": "M16 G1 Formativa B",            "json_file": "data/urba-m16-g1-formativa-b.json",            "firebase_key": "urbaM16G1FormativaB"},
 
     # ── M15 (10 divisiones) ───────────────────────────────────────────────────
-    {"id": "2025262", "nombre": "M15 G1-ZB",          "json_file": "data/juvenil-m15-g1-zb.json",          "firebase_key": "urbaM15G1ZB"},
-    {"id": "2025263", "nombre": "M15 Form-ZA",        "json_file": "data/juvenil-m15-form-za.json",        "firebase_key": "urbaM15FormZA"},
-    {"id": "2025264", "nombre": "M15 Form-ZB",        "json_file": "data/juvenil-m15-form-zb.json",        "firebase_key": "urbaM15FormZB"},
-    {"id": "2025255", "nombre": "M15 N1-G2-ZA-EqA",  "json_file": "data/juvenil-m15-n1-g2-za-eqa.json",  "firebase_key": "urbaM15N1ZaEqA"},
-    {"id": "2025256", "nombre": "M15 N1-G2-ZA-EqB",  "json_file": "data/juvenil-m15-n1-g2-za-eqb.json",  "firebase_key": "urbaM15N1ZaEqB"},
-    {"id": "2025257", "nombre": "M15 N1-G2-ZB-EqA",  "json_file": "data/juvenil-m15-n1-g2-zb-eqa.json",  "firebase_key": "urbaM15N1ZbEqA"},
-    {"id": "2025258", "nombre": "M15 N1-G2-ZB-EqB",  "json_file": "data/juvenil-m15-n1-g2-zb-eqb.json",  "firebase_key": "urbaM15N1ZbEqB"},
-    {"id": "2025259", "nombre": "M15 G2-ZDes-EqA",   "json_file": "data/juvenil-m15-g2-zdes-eqa.json",   "firebase_key": "urbaM15G2ZDesEqA"},
-    {"id": "2025260", "nombre": "M15 G2-ZDes-EqB",   "json_file": "data/juvenil-m15-g2-zdes-eqb.json",   "firebase_key": "urbaM15G2ZDesEqB"},
-    {"id": "2025261", "nombre": "M15 G1-ZA",          "json_file": "data/juvenil-m15-g1-za.json",          "firebase_key": "urbaM15G1ZA"},
+    {"id": "2025255", "nombre": "M15 G2 NIVEL 1 A",              "json_file": "data/urba-m15-g2-nivel-1-a.json",              "firebase_key": "urbaM15G2NIVEL1A"},
+    {"id": "2025256", "nombre": "M15 G2 NIVEL 1 A Eq B",         "json_file": "data/urba-m15-g2-nivel-1-a-eq-b.json",         "firebase_key": "urbaM15G2NIVEL1AEqB"},
+    {"id": "2025257", "nombre": "M15 G2 NIVEL 1 B",              "json_file": "data/urba-m15-g2-nivel-1-b.json",              "firebase_key": "urbaM15G2NIVEL1B"},
+    {"id": "2025258", "nombre": "M15 G2 NIVEL 1 B Eq B",         "json_file": "data/urba-m15-g2-nivel-1-b-eq-b.json",         "firebase_key": "urbaM15G2NIVEL1BEqB"},
+    {"id": "2025259", "nombre": "M15 G2 NIVEL 2 Desarrollo",     "json_file": "data/urba-m15-g2-nivel-2-desarrollo.json",     "firebase_key": "urbaM15G2NIVEL2Desarrollo"},
+    {"id": "2025260", "nombre": "M15 G2 NIVEL 2 Desarrollo Eq B","json_file": "data/urba-m15-g2-nivel-2-desarrollo-eq-b.json","firebase_key": "urbaM15G2NIVEL2DesarrolloEqB"},
+    {"id": "2025261", "nombre": "M15 G1 A",                      "json_file": "data/urba-m15-g1-a.json",                      "firebase_key": "urbaM15G1A"},
+    {"id": "2025262", "nombre": "M15 G1 B",                      "json_file": "data/urba-m15-g1-b.json",                      "firebase_key": "urbaM15G1B"},
+    {"id": "2025263", "nombre": "M15 G1 Formativa A",            "json_file": "data/urba-m15-g1-formativa-a.json",            "firebase_key": "urbaM15G1FormativaA"},
+    {"id": "2025264", "nombre": "M15 G1 Formativa B",            "json_file": "data/urba-m15-g1-formativa-b.json",            "firebase_key": "urbaM15G1FormativaB"},
 ]
 
 # ── SRA / SN teams ────────────────────────────────────────────────────────────
@@ -210,128 +205,80 @@ def firebase_patch(path, data):
 # ── Scraper ESPN ──────────────────────────────────────────────────────────────
 def fetch_html(url):
     try:
-        r = requests.get(url, headers=HEADERS_HTML, timeout=15)
+        r = requests.get(url, headers=HEADERS_HTML, timeout=20)
         r.raise_for_status()
         return r.text
     except Exception as e:
         print(f"  Error fetching {url}: {e}"); return ""
 
+def _cell_text(raw_html):
+    """Convierte HTML de una celda a texto limpio."""
+    t = re.sub(r'<br\s*/?>|</p>|</li>', ' ', raw_html, flags=re.IGNORECASE)
+    t = re.sub(r'<[^>]+>', '', t)
+    return re.sub(r'\s+', ' ', t).strip()
+
 def scrape_scores(url, teams_list, normalize_fn):
     html = fetch_html(url)
-    if not html: return []
+    if not html:
+        return []
+
     results = []
-    seen = set()
+    seen    = set()
+    score_re = re.compile(r'^\s*(\d{1,3})\s*[-–—]\s*(\d{1,3})\s*$')
+
     rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL | re.IGNORECASE)
+    print(f"  Filas <tr> en HTML: {len(rows)}")
+
     for row in rows:
-        cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
-        cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
-        cells = [re.sub(r'\s+', ' ', c).strip() for c in cells]
+        raw_cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
+        cells = [_cell_text(c) for c in raw_cells]
         cells = [c for c in cells if c]
-        if len(cells) == 4:   _, home_cell, score_cell, away_cell = cells
-        elif len(cells) == 3: home_cell, score_cell, away_cell = cells
-        else: continue
-        score_match = re.match(r'^(\d{1,3})[-–](\d{1,3})$', score_cell.strip())
-        if not score_match: continue
-        hs  = int(score_match.group(1))
-        as_ = int(score_match.group(2))
-        home = normalize_fn(home_cell)
-        away = normalize_fn(away_cell)
-        if home not in teams_list or away not in teams_list: continue
-        if home == away: continue
+
+        if len(cells) < 3:
+            continue
+
+        # Buscar la celda con puntaje en cualquier posición
+        score_idx = None
+        for i, cell in enumerate(cells):
+            if score_re.match(cell):
+                score_idx = i
+                break
+
+        if score_idx is None or score_idx == 0 or score_idx >= len(cells) - 1:
+            continue
+
+        m   = score_re.match(cells[score_idx])
+        hs  = int(m.group(1))
+        as_ = int(m.group(2))
+
+        home_raw = cells[score_idx - 1]
+        away_raw = cells[score_idx + 1]
+        home = normalize_fn(home_raw)
+        away = normalize_fn(away_raw)
+
+        if home not in teams_list or away not in teams_list:
+            print(f"  ⚠ Sin alias: '{home_raw}' → '{home}' | '{away_raw}' → '{away}'")
+            continue
+        if home == away:
+            continue
+
         canonical = "_vs_".join(sorted([home, away]))
-        if canonical in seen: continue
+        if canonical in seen:
+            continue
         seen.add(canonical)
         results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
         print(f"  ✓ {home} {hs}–{as_} {away}")
+
+    if not results:
+        snippet = re.sub(r'\s+', ' ', html[2000:3500])
+        print(f"  DEBUG HTML[2000:3500]: {snippet}")
+
     return results
 
 # ── Super Rugby Américas ──────────────────────────────────────────────────────
-def fetch_espn_scoreboard_sra():
-    """Obtiene resultados SRA de la API JSON de ESPN.
-    ESPN scoreboard acepta ?dates=YYYYMMDD (fecha específica, devuelve la semana de esa fecha).
-    Iteramos semana a semana por toda la temporada 2026 (feb–jul).
-    """
-    from datetime import date, timedelta
-
-    results = []
-    seen = set()
-
-    # Generar un sábado por cada semana de la temporada 2026
-    # Super Rugby Américas corre aproximadamente de feb a jun/jul 2026
-    start = date(2026, 2, 14)
-    end   = date(2026, 7, 5)
-    week_dates = []
-    d = start
-    while d <= end:
-        week_dates.append(d.strftime("%Y%m%d"))
-        d += timedelta(days=7)
-
-    fetched_weeks = set()
-
-    for date_str in week_dates:
-        url = f"{ESPN_SLAR_API}?dates={date_str}&limit=50"
-        try:
-            r = requests.get(url, headers=HEADERS_ESPN, timeout=15)
-            if r.status_code != 200:
-                print(f"  ESPN API {date_str}: status {r.status_code}"); continue
-            data = r.json()
-            events = data.get("events", [])
-            if not events:
-                continue
-            for event in events:
-                eid = event.get("id", "")
-                if eid in fetched_weeks:
-                    continue
-                fetched_weeks.add(eid)
-
-                status = event.get("status", {}).get("type", {})
-                if not status.get("completed", False):
-                    continue
-                comp = event.get("competitions", [{}])[0]
-                competitors = comp.get("competitors", [])
-                home_data = next((c for c in competitors if c.get("homeAway") == "home"), None)
-                away_data = next((c for c in competitors if c.get("homeAway") == "away"), None)
-                if not home_data or not away_data:
-                    continue
-
-                def resolve(c):
-                    t = c.get("team", {})
-                    for key in ("name", "displayName", "shortDisplayName"):
-                        n = norm_sra(t.get(key, ""))
-                        if n in SRA_TEAMS:
-                            return n
-                    return norm_sra(t.get("name", ""))
-
-                home = resolve(home_data)
-                away = resolve(away_data)
-                try:
-                    hs  = int(float(home_data.get("score", 0)))
-                    as_ = int(float(away_data.get("score", 0)))
-                except (ValueError, TypeError):
-                    continue
-                if home not in SRA_TEAMS or away not in SRA_TEAMS:
-                    # Log para debug: qué nombre recibió ESPN que no matcheó
-                    raw_h = home_data.get("team", {}).get("name", "?")
-                    raw_a = away_data.get("team", {}).get("name", "?")
-                    if raw_h or raw_a:
-                        print(f"  ⚠ Sin alias para: '{raw_h}' vs '{raw_a}'")
-                    continue
-                if home == away:
-                    continue
-                canonical = "_vs_".join(sorted([home, away]))
-                if canonical in seen:
-                    continue
-                seen.add(canonical)
-                results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
-                print(f"  ✓ {home} {hs}–{as_} {away}")
-        except Exception as e:
-            print(f"  Error ESPN API {date_str}: {e}")
-    return results
-
-
 def fetch_sra():
     print("\n── SUPER RUGBY AMÉRICAS ─────────────────────────")
-    results = fetch_espn_scoreboard_sra()
+    results = scrape_scores(SRA_URL, SRA_TEAMS, norm_sra)
     print(f"  Total resultados: {len(results)}")
     now = datetime.now(timezone.utc).isoformat()
 
