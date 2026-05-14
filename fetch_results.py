@@ -26,9 +26,14 @@ HEADERS_API = {
 }
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
-SRA_URL       = "https://www.espn.com.ar/rugby/nota/_/id/14697755/super-rugby-americas-rugby-resultados-posiciones-fixture-pampas-dogos-xv-tarucas-cobras-selknam-penarol-yacare-capibaras"
+ESPN_SLAR_API = "https://site.api.espn.com/apis/site/v2/sports/rugby-union/slar/scoreboard"
 SN_URL        = "https://www.espn.com.ar/rugby/nota/_/id/15203928/rugby-seis-naciones-fixture-resultados-tabla-posiciones-2026-francia-irlanda-gales-escocia-inglaterra-italia-partidos"
 URBA_API_BASE = "https://api.urba.org.ar/api/championship"
+
+HEADERS_ESPN = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
 
 # ── Torneos URBA activos 2026 — lista completa ────────────────────────────────
 URBA_TORNEOS = [
@@ -241,9 +246,62 @@ def scrape_scores(url, teams_list, normalize_fn):
     return results
 
 # ── Super Rugby Américas ──────────────────────────────────────────────────────
+def fetch_espn_scoreboard_sra():
+    """Obtiene resultados SRA de la API JSON de ESPN (cubre toda la temporada 2026)."""
+    results = []
+    seen = set()
+    # Cubrir todos los meses de la temporada 2026
+    months = ["202602", "202603", "202604", "202605", "202606", "202607"]
+    for month in months:
+        url = f"{ESPN_SLAR_API}?dates={month}&limit=100"
+        try:
+            r = requests.get(url, headers=HEADERS_ESPN, timeout=15)
+            if r.status_code != 200:
+                print(f"  ESPN API {month}: status {r.status_code}"); continue
+            data = r.json()
+            for event in data.get("events", []):
+                status = event.get("status", {}).get("type", {})
+                if not status.get("completed", False):
+                    continue
+                comp = event.get("competitions", [{}])[0]
+                competitors = comp.get("competitors", [])
+                home_data = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away_data = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home_data or not away_data:
+                    continue
+                # Intentar con name y displayName para máxima compatibilidad
+                def resolve(c):
+                    t = c.get("team", {})
+                    for key in ("name", "displayName", "shortDisplayName"):
+                        n = norm_sra(t.get(key, ""))
+                        if n in SRA_TEAMS:
+                            return n
+                    return norm_sra(t.get("name", ""))
+                home = resolve(home_data)
+                away = resolve(away_data)
+                try:
+                    hs  = int(float(home_data.get("score", 0)))
+                    as_ = int(float(away_data.get("score", 0)))
+                except (ValueError, TypeError):
+                    continue
+                if home not in SRA_TEAMS or away not in SRA_TEAMS:
+                    continue
+                if home == away:
+                    continue
+                canonical = "_vs_".join(sorted([home, away]))
+                if canonical in seen:
+                    continue
+                seen.add(canonical)
+                results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
+                print(f"  ✓ {home} {hs}–{as_} {away}")
+        except Exception as e:
+            print(f"  Error ESPN API {month}: {e}")
+    return results
+
+
 def fetch_sra():
     print("\n── SUPER RUGBY AMÉRICAS ─────────────────────────")
-    results = scrape_scores(SRA_URL, SRA_TEAMS, norm_sra)
+    results = fetch_espn_scoreboard_sra()
     print(f"  Total resultados: {len(results)}")
     now = datetime.now(timezone.utc).isoformat()
 
