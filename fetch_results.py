@@ -247,19 +247,43 @@ def scrape_scores(url, teams_list, normalize_fn):
 
 # ── Super Rugby Américas ──────────────────────────────────────────────────────
 def fetch_espn_scoreboard_sra():
-    """Obtiene resultados SRA de la API JSON de ESPN (cubre toda la temporada 2026)."""
+    """Obtiene resultados SRA de la API JSON de ESPN.
+    ESPN scoreboard acepta ?dates=YYYYMMDD (fecha específica, devuelve la semana de esa fecha).
+    Iteramos semana a semana por toda la temporada 2026 (feb–jul).
+    """
+    from datetime import date, timedelta
+
     results = []
     seen = set()
-    # Cubrir todos los meses de la temporada 2026
-    months = ["202602", "202603", "202604", "202605", "202606", "202607"]
-    for month in months:
-        url = f"{ESPN_SLAR_API}?dates={month}&limit=100"
+
+    # Generar un sábado por cada semana de la temporada 2026
+    # Super Rugby Américas corre aproximadamente de feb a jun/jul 2026
+    start = date(2026, 2, 14)
+    end   = date(2026, 7, 5)
+    week_dates = []
+    d = start
+    while d <= end:
+        week_dates.append(d.strftime("%Y%m%d"))
+        d += timedelta(days=7)
+
+    fetched_weeks = set()
+
+    for date_str in week_dates:
+        url = f"{ESPN_SLAR_API}?dates={date_str}&limit=50"
         try:
             r = requests.get(url, headers=HEADERS_ESPN, timeout=15)
             if r.status_code != 200:
-                print(f"  ESPN API {month}: status {r.status_code}"); continue
+                print(f"  ESPN API {date_str}: status {r.status_code}"); continue
             data = r.json()
-            for event in data.get("events", []):
+            events = data.get("events", [])
+            if not events:
+                continue
+            for event in events:
+                eid = event.get("id", "")
+                if eid in fetched_weeks:
+                    continue
+                fetched_weeks.add(eid)
+
                 status = event.get("status", {}).get("type", {})
                 if not status.get("completed", False):
                     continue
@@ -269,7 +293,7 @@ def fetch_espn_scoreboard_sra():
                 away_data = next((c for c in competitors if c.get("homeAway") == "away"), None)
                 if not home_data or not away_data:
                     continue
-                # Intentar con name y displayName para máxima compatibilidad
+
                 def resolve(c):
                     t = c.get("team", {})
                     for key in ("name", "displayName", "shortDisplayName"):
@@ -277,6 +301,7 @@ def fetch_espn_scoreboard_sra():
                         if n in SRA_TEAMS:
                             return n
                     return norm_sra(t.get("name", ""))
+
                 home = resolve(home_data)
                 away = resolve(away_data)
                 try:
@@ -285,6 +310,11 @@ def fetch_espn_scoreboard_sra():
                 except (ValueError, TypeError):
                     continue
                 if home not in SRA_TEAMS or away not in SRA_TEAMS:
+                    # Log para debug: qué nombre recibió ESPN que no matcheó
+                    raw_h = home_data.get("team", {}).get("name", "?")
+                    raw_a = away_data.get("team", {}).get("name", "?")
+                    if raw_h or raw_a:
+                        print(f"  ⚠ Sin alias para: '{raw_h}' vs '{raw_a}'")
                     continue
                 if home == away:
                     continue
@@ -295,7 +325,7 @@ def fetch_espn_scoreboard_sra():
                 results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
                 print(f"  ✓ {home} {hs}–{as_} {away}")
         except Exception as e:
-            print(f"  Error ESPN API {month}: {e}")
+            print(f"  Error ESPN API {date_str}: {e}")
     return results
 
 
