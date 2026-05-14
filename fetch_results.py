@@ -15,9 +15,17 @@ GH_TOKEN        = os.environ.get("GH_TOKEN")
 GH_REPO = "ovalados/ovalados-ysisi"
 
 HEADERS_HTML = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml",
-    "Accept-Language": "es-AR,es;q=0.9",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-AR,es;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
 }
 HEADERS_API = {
     "User-Agent": "Mozilla/5.0",
@@ -204,16 +212,18 @@ def firebase_patch(path, data):
 
 # ── Scraper ESPN ──────────────────────────────────────────────────────────────
 def fetch_html(url):
+    session = requests.Session()
+    session.headers.update(HEADERS_HTML)
     try:
-        r = requests.get(url, headers=HEADERS_HTML, timeout=20)
+        r = session.get(url, timeout=20, allow_redirects=True)
+        print(f"  HTTP {r.status_code} — {len(r.text)} chars")
         r.raise_for_status()
         return r.text
     except Exception as e:
         print(f"  Error fetching {url}: {e}"); return ""
 
-def _cell_text(raw_html):
-    """Convierte HTML de una celda a texto limpio."""
-    t = re.sub(r'<br\s*/?>|</p>|</li>', ' ', raw_html, flags=re.IGNORECASE)
+def _to_text(html_fragment):
+    t = re.sub(r'<br\s*/?>|</p>|</li>|</div>', ' ', html_fragment, flags=re.IGNORECASE)
     t = re.sub(r'<[^>]+>', '', t)
     return re.sub(r'\s+', ' ', t).strip()
 
@@ -223,55 +233,78 @@ def scrape_scores(url, teams_list, normalize_fn):
         return []
 
     results = []
-    seen    = set()
-    score_re = re.compile(r'^\s*(\d{1,3})\s*[-–—]\s*(\d{1,3})\s*$')
+    seen     = set()
+    score_re     = re.compile(r'^\s*(\d{1,3})\s*[-–—]\s*(\d{1,3})\s*$')
+    score_inline = re.compile(r'\b(\d{1,3})\s*[-–—]\s*(\d{1,3})\b')
 
-    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL | re.IGNORECASE)
-    print(f"  Filas <tr> en HTML: {len(rows)}")
+    clean = re.sub(r'<script[^>]*>.*?</script>', ' ', html, flags=re.DOTALL|re.IGNORECASE)
+    clean = re.sub(r'<style[^>]*>.*?</style>',  ' ', clean, flags=re.DOTALL|re.IGNORECASE)
+
+    # ── Estrategia 1: tablas ───────────────────────────────────────────────────
+    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', clean, re.DOTALL | re.IGNORECASE)
+    print(f"  <tr> encontradas: {len(rows)}")
 
     for row in rows:
         raw_cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
-        cells = [_cell_text(c) for c in raw_cells]
+        cells = [_to_text(c) for c in raw_cells]
         cells = [c for c in cells if c]
-
-        if len(cells) < 3:
-            continue
-
-        # Buscar la celda con puntaje en cualquier posición
-        score_idx = None
+        if len(cells) < 3: continue
         for i, cell in enumerate(cells):
-            if score_re.match(cell):
-                score_idx = i
-                break
+            if not score_re.match(cell) or i == 0 or i >= len(cells) - 1: continue
+            m = score_re.match(cell)
+            hs, as_ = int(m.group(1)), int(m.group(2))
+            home = normalize_fn(cells[i - 1])
+            away = normalize_fn(cells[i + 1])
+            if home not in teams_list or away not in teams_list:
+                print(f"  ⚠ sin alias: '{cells[i-1]}'→'{home}' | '{cells[i+1]}'→'{away}'")
+                continue
+            if home == away: continue
+            canonical = "_vs_".join(sorted([home, away]))
+            if canonical in seen: continue
+            seen.add(canonical)
+            results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
+            print(f"  ✓ {home} {hs}–{as_} {away}")
 
-        if score_idx is None or score_idx == 0 or score_idx >= len(cells) - 1:
-            continue
+    # ── Estrategia 2: texto plano ──────────────────────────────────────────────
+    if not results:
+        print("  Sin resultados en tablas → buscando en texto plano...")
+        plain = re.sub(r'<[^>]+>', '\n', clean)
+        lines = [re.sub(r'\s+', ' ', l).strip() for l in plain.split('\n') if l.strip()]
 
-        m   = score_re.match(cells[score_idx])
-        hs  = int(m.group(1))
-        as_ = int(m.group(2))
-
-        home_raw = cells[score_idx - 1]
-        away_raw = cells[score_idx + 1]
-        home = normalize_fn(home_raw)
-        away = normalize_fn(away_raw)
-
-        if home not in teams_list or away not in teams_list:
-            print(f"  ⚠ Sin alias: '{home_raw}' → '{home}' | '{away_raw}' → '{away}'")
-            continue
-        if home == away:
-            continue
-
-        canonical = "_vs_".join(sorted([home, away]))
-        if canonical in seen:
-            continue
-        seen.add(canonical)
-        results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
-        print(f"  ✓ {home} {hs}–{as_} {away}")
+        for i, line in enumerate(lines):
+            sm = score_re.match(line)
+            if not sm:
+                parts = score_inline.split(line)
+                if len(parts) >= 3:
+                    before, hs_s, as_s, after = parts[0], parts[1], parts[2], "".join(parts[3:])
+                    home = normalize_fn(before.strip())
+                    away = normalize_fn(after.strip())
+                    if home in teams_list and away in teams_list and home != away:
+                        hs, as_ = int(hs_s), int(as_s)
+                        canonical = "_vs_".join(sorted([home, away]))
+                        if canonical not in seen:
+                            seen.add(canonical)
+                            results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
+                            print(f"  ✓ (inline) {home} {hs}–{as_} {away}")
+                continue
+            hs, as_ = int(sm.group(1)), int(sm.group(2))
+            home = away = None
+            for cl in reversed(lines[max(0, i-4):i]):
+                n = normalize_fn(cl)
+                if n in teams_list: home = n; break
+            for cl in lines[i+1: i+5]:
+                n = normalize_fn(cl)
+                if n in teams_list: away = n; break
+            if not home or not away or home == away: continue
+            canonical = "_vs_".join(sorted([home, away]))
+            if canonical in seen: continue
+            seen.add(canonical)
+            results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
+            print(f"  ✓ (texto) {home} {hs}–{as_} {away}")
 
     if not results:
-        snippet = re.sub(r'\s+', ' ', html[2000:3500])
-        print(f"  DEBUG HTML[2000:3500]: {snippet}")
+        print(f"  DEBUG HTML[0:200]:     {re.sub(chr(10), ' ', html[:200])}")
+        print(f"  DEBUG HTML[2000:3500]: {re.sub(chr(10), ' ', html[2000:3500])}")
 
     return results
 
