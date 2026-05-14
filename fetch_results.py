@@ -34,7 +34,7 @@ HEADERS_API = {
 }
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
-SRA_URL       = "https://www.espn.com.ar/rugby/nota/_/id/14697755/super-rugby-americas-rugby-resultados-posiciones-fixture-pampas-dogos-xv-tarucas-cobras-selknam-penarol-yacare-capibaras"
+ESPN_SLAR_API = "https://site.api.espn.com/apis/site/v2/sports/rugby-union/slar/scoreboard"
 SN_URL        = "https://www.espn.com.ar/rugby/nota/_/id/15203928/rugby-seis-naciones-fixture-resultados-tabla-posiciones-2026-francia-irlanda-gales-escocia-inglaterra-italia-partidos"
 URBA_API_BASE = "https://api.urba.org.ar/api/championship"
 
@@ -309,9 +309,84 @@ def scrape_scores(url, teams_list, normalize_fn):
     return results
 
 # ── Super Rugby Américas ──────────────────────────────────────────────────────
+def fetch_espn_sra():
+    from datetime import date, timedelta
+    HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+    results = []
+    seen = set()
+    fetched_ids = set()
+
+    week_dates = []
+    d = date(2026, 2, 14)
+    while d <= date(2026, 7, 12):
+        week_dates.append(d.strftime("%Y%m%d"))
+        d += timedelta(days=7)
+
+    urls = (
+        [f"{ESPN_SLAR_API}?limit=100",
+         f"{ESPN_SLAR_API}?season=2026&limit=100",
+         f"{ESPN_SLAR_API}?season=2026&seasontype=2&limit=100"]
+        + [f"{ESPN_SLAR_API}?dates={dt}&limit=50" for dt in week_dates]
+    )
+
+    for url in urls:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=15)
+            events = []
+            if r.status_code == 200:
+                events = r.json().get("events", [])
+            print(f"  {r.status_code} {len(events):>3} eventos — {url[-60:]}")
+            for event in events:
+                eid = event.get("id", "")
+                if eid in fetched_ids:
+                    continue
+                fetched_ids.add(eid)
+                status = event.get("status", {}).get("type", {})
+                if not status.get("completed", False):
+                    continue
+                comp = event.get("competitions", [{}])[0]
+                competitors = comp.get("competitors", [])
+                hd = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                ad = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not hd or not ad:
+                    continue
+
+                def resolve(c):
+                    t = c.get("team", {})
+                    for key in ("name", "displayName", "shortDisplayName"):
+                        n = norm_sra(t.get(key, ""))
+                        if n in SRA_TEAMS:
+                            return n
+                    raw = t.get("name", "")
+                    print(f"    ⚠ sin alias: '{raw}'")
+                    return norm_sra(raw)
+
+                home = resolve(hd)
+                away = resolve(ad)
+                if home not in SRA_TEAMS or away not in SRA_TEAMS:
+                    continue
+                if home == away:
+                    continue
+                try:
+                    hs  = int(float(hd.get("score", 0)))
+                    as_ = int(float(ad.get("score", 0)))
+                except (ValueError, TypeError):
+                    continue
+                canonical = "_vs_".join(sorted([home, away]))
+                if canonical in seen:
+                    continue
+                seen.add(canonical)
+                results.append({"home": home, "away": away, "hs": hs, "as": as_, "played": True})
+                print(f"  ✓ {home} {hs}–{as_} {away}")
+        except Exception as e:
+            print(f"  ERROR {url[-50:]}: {e}")
+
+    return results
+
+
 def fetch_sra():
     print("\n── SUPER RUGBY AMÉRICAS ─────────────────────────")
-    results = scrape_scores(SRA_URL, SRA_TEAMS, norm_sra)
+    results = fetch_espn_sra()
     print(f"  Total resultados: {len(results)}")
     now = datetime.now(timezone.utc).isoformat()
 
