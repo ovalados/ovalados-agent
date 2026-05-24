@@ -51,6 +51,7 @@ URBA_TORNEOS = [
     {"id": "2025200", "nombre": "Pre-Inter E",        "json_file": "data/urba-preinter-e.json",       "firebase_key": "urbaPreInterE"},
     {"id": "2025201", "nombre": "Pre-Inter F",        "json_file": "data/urba-preinter-f.json",       "firebase_key": "urbaPreInterF"},
     {"id": "2025206", "nombre": "M22",                "json_file": "data/urba-m22.json",              "firebase_key": "urbaM22"},
+    {"id": "2025212", "nombre": "Universitario",      "json_file": "data/urba-universitario.json",    "firebase_key": "urbaUniversitario"},
 
     # ── PRIMERA A y sus divisiones ────────────────────────────────────────────
     {"id": "2025177", "nombre": "Primera A",          "json_file": "data/urba-primera-a.json",        "firebase_key": "urbaPrimeraA"},
