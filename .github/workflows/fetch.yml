@@ -29,6 +29,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           FIREBASE_URL: ${{ secrets.FIREBASE_URL }}
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+          # Notificación al celular (configurá al menos uno en Settings → Secrets):
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Súper Rugby / Seis Naciones apagados por defecto. Poné "1" para activarlos.
+          ENABLE_SECONDARY: ""
         run: python fetch_results.py
 
       # El scraper ya sube los JSON directo via GitHub API — no se necesita git push adicional
