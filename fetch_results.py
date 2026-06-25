@@ -6,7 +6,7 @@ Ovalados Agent — Fetcher multi-torneo
 - URBA (todos):         API oficial URBA    → data/urba-{key}.json
 Todos los JSON se suben automáticamente al repo ovalados-sitio en GitHub.
 """
-import requests, re, os, json, base64
+import requests, re, os, json, base64, sys
 from datetime import datetime, timezone
 
 FIREBASE_URL    = os.environ.get("FIREBASE_URL")
@@ -164,6 +164,56 @@ SN_ALIASES = {
 
 def norm_sra(name): return SRA_ALIASES.get(name.lower().strip(), name.strip())
 def norm_sn(name):  return SN_ALIASES.get(name.lower().strip(), name.strip())
+
+# ── Estado de la corrida (para notificar al celular) ──────────────────────────
+NEW_RESULTS = []   # resultados URBA nuevos detectados en esta corrida
+URBA_ERRORS = []   # errores en torneos URBA (lo único que dispara alerta)
+
+# ── Notificación push al celular (ntfy y/o Telegram) ──────────────────────────
+def notify(title_ascii, body):
+    """Manda una notificación al celular. title_ascii: solo ASCII (cabecera ntfy).
+    body: texto libre UTF-8. Funciona si está seteado NTFY_TOPIC y/o Telegram."""
+    sent = False
+    topic = os.environ.get("NTFY_TOPIC")
+    if topic:
+        try:
+            requests.post(
+                f"https://ntfy.sh/{topic}",
+                data=body.encode("utf-8"),
+                headers={"Title": title_ascii.encode("ascii", "ignore").decode(),
+                         "Tags": "rugby_football"},
+                timeout=10)
+            print(f"  ntfy → ✓ ({topic})"); sent = True
+        except Exception as e:
+            print(f"  ntfy error: {e}")
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    tg_chat  = os.environ.get("TELEGRAM_CHAT_ID")
+    if tg_token and tg_chat:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                json={"chat_id": tg_chat, "text": f"*{title_ascii}*\n{body}",
+                      "parse_mode": "Markdown"},
+                timeout=10)
+            print("  telegram → ✓"); sent = True
+        except Exception as e:
+            print(f"  telegram error: {e}")
+    if not sent:
+        print("  (notificación no enviada — configurá NTFY_TOPIC o Telegram en los secrets)")
+
+def github_get_json(path):
+    """Lee el JSON actual de un archivo del repo (o {} si no existe / falla)."""
+    if not GH_TOKEN:
+        return {}
+    headers = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    try:
+        r = requests.get(f"https://api.github.com/repos/{GH_REPO}/contents/{path}",
+                         headers=headers, timeout=10)
+        if r.status_code == 200:
+            return json.loads(base64.b64decode(r.json()["content"]).decode())
+    except Exception:
+        pass
+    return {}
 
 # ── GitHub ────────────────────────────────────────────────────────────────────
 def github_push(path, content_str, message):
@@ -539,6 +589,29 @@ def fetch_urba_torneo(torneo):
     print(f"  Total jugados: {len(results)}")
     now = datetime.now(timezone.utc).isoformat()
 
+    # ── Detección de cambios y resultados nuevos vs. lo que ya está en GitHub ──
+    current     = github_get_json(json_file)
+    cur_matches = current.get("matches", {})
+    nuevos = []
+    for rk, rnd in rounds_data.items():
+        cur_ms = {(m.get("home"), m.get("away")): m
+                  for m in cur_matches.get(rk, {}).get("ms", [])}
+        for m in rnd.get("ms", []):
+            if not m.get("played"):
+                continue
+            prev = cur_ms.get((m.get("home"), m.get("away")))
+            es_nuevo = (not prev or not prev.get("played")
+                        or prev.get("hs") != m.get("hs")
+                        or prev.get("as") != m.get("as"))
+            if es_nuevo:
+                nuevos.append(f"{nombre} F{rk}: {m['home']} {m['hs']}-{m['as']} {m['away']}")
+
+    # Si el contenido (tabla + partidos) no cambió respecto a lo guardado, no pushear.
+    # Esto evita el spam de commits que choca con el rate-limit de GitHub.
+    if current and cur_matches == rounds_data and current.get("teams") == teams_list:
+        print("  Sin cambios → no se pushea")
+        return
+
     output = {
         "teams":          teams_list,
         "matches":        rounds_data,
@@ -548,12 +621,15 @@ def fetch_urba_torneo(torneo):
         "nombre":         nombre,
     }
     content_str = json.dumps(output, ensure_ascii=False, indent=2)
-    github_push(json_file, content_str,
-                f"bot: URBA {nombre} update {now[:10]}")
+    pushed = github_push(json_file, content_str,
+                         f"bot: URBA {nombre} update {now[:10]}")
     # También actualizar el archivo alias (juvenil-*.json) si existe
     if torneo.get("alias_json_file"):
         github_push(torneo["alias_json_file"], content_str,
                     f"bot: URBA {nombre} update {now[:10]}")
+    if pushed and nuevos:
+        NEW_RESULTS.extend(nuevos)
+        print(f"  ✚ {len(nuevos)} resultado(s) nuevo(s)")
     firebase_patch(f"{firebase_key}/meta", {
         "lastUpdate": now, "matchesFound": len(results),
         "source": "api-urba-org-ar", "championshipId": torneo["id"],
@@ -565,10 +641,39 @@ def main():
     print(f"Ovalados Agent — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"{'='*52}")
 
-    fetch_sra()
-    fetch_seis_naciones()
+    # ── URBA primero: es lo único que importa. Cada torneo aislado para que
+    #    un fallo no tumbe a los demás. ─────────────────────────────────────────
     for torneo in URBA_TORNEOS:
-        fetch_urba_torneo(torneo)
+        try:
+            fetch_urba_torneo(torneo)
+        except Exception as e:
+            msg = f"{torneo['nombre']}: {e}"
+            print(f"  ✗ ERROR {msg}")
+            URBA_ERRORS.append(msg)
+
+    # ── Fuentes secundarias (Súper Rugby / Seis Naciones): apagadas por defecto.
+    #    Eran las que fallaban (ESPN) y no son prioritarias. Activalas con
+    #    ENABLE_SECONDARY=1 en los secrets si alguna vez las querés. ─────────────
+    if os.environ.get("ENABLE_SECONDARY") == "1":
+        for fn, label in ((fetch_sra, "Super Rugby"), (fetch_seis_naciones, "Seis Naciones")):
+            try:
+                fn()
+            except Exception as e:
+                print(f"  ✗ {label}: {e}")  # no dispara alerta
+
+    # ── Notificar al celular ───────────────────────────────────────────────────
+    if NEW_RESULTS:
+        cuerpo = "\n".join(NEW_RESULTS[:30])
+        if len(NEW_RESULTS) > 30:
+            cuerpo += f"\n... y {len(NEW_RESULTS) - 30} más"
+        notify(f"Ovalados: {len(NEW_RESULTS)} resultado(s) nuevo(s)", cuerpo)
+    else:
+        print("\n  Sin resultados nuevos en esta corrida")
+
+    if URBA_ERRORS:
+        notify("Ovalados: error en el scraper URBA", "\n".join(URBA_ERRORS[:15]))
+        print(f"\n✗ {len(URBA_ERRORS)} error(es) URBA\n")
+        sys.exit(1)
 
     print(f"\n✓ Listo\n")
 
